@@ -147,7 +147,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="app-container">
-    <Announcement v-if="!showEndDisplay" />
+    <Display v-if="!showEndDisplay" />
     <EndDisplay v-else />
     <Loading v-if="showLoading" @loading-complete="handleLoadingComplete" />
 
