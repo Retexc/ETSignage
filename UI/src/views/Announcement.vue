@@ -33,6 +33,7 @@
             :alt="annonceActuelle.nom"
             :class="getMediaClass(annonceActuelle.modeAffichage)"
             @load="onMediaLoaded"
+            @error="onMediaError"
           >
         </div>
       </transition>
@@ -102,6 +103,13 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
         </svg>
       </button>
+      
+      <!-- 🆕 NOUVEAU : Bouton pour recharger manuellement -->
+      <button @click="rechargerAnnonces" class="control-btn ml-4" title="Recharger les annonces">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        </svg>
+      </button>
     </div>
   </div>
 </template>
@@ -118,6 +126,7 @@ const annonceStore = useAnnonceStore()
 const videoPlayer = ref(null)
 const currentTimer = ref(null)
 const showControls = ref(true) // Mettre à false pour cacher les contrôles
+const cycleComplet = ref(false) // 🆕 Pour savoir si on a fait un cycle complet
 
 // Computed
 const annonceActuelle = computed(() => annonceStore.annonceActuelle)
@@ -139,6 +148,13 @@ const getMediaClass = (mode) => {
   }
 }
 
+// 🆕 NOUVELLE FONCTION : Recharger les annonces depuis localStorage
+const rechargerAnnonces = () => {
+  console.log('🔄 Rechargement des annonces...')
+  annonceStore.chargerLocal()
+  console.log('✅ Annonces rechargées')
+}
+
 // Gestion du timer pour passer à la page suivante
 const startTimer = () => {
   if (currentTimer.value) {
@@ -155,7 +171,17 @@ const startTimer = () => {
 
 // Navigation
 const nextPage = () => {
+  // 🆕 AMÉLIORATION : Détecter quand on revient au début
+  const totalPages = totalAnnonces.value
+  const pageAvant = pageActuelle.value
+  
   annonceStore.pageSuivante()
+  
+  // Si on revient à la page 0, c'est qu'on a fait un cycle complet
+  if (pageAvant === totalPages - 1 && annonceStore.pageActuelle === 0) {
+    console.log('🔄 Cycle complet terminé - Rechargement des données...')
+    rechargerAnnonces()
+  }
 }
 
 const previousPage = () => {
@@ -181,32 +207,57 @@ const togglePause = () => {
 
 // Événements média
 const onMediaLoaded = () => {
-  console.log('Média chargé:', annonceActuelle.value?.nom)
+  console.log('✅ Média chargé:', annonceActuelle.value?.nom)
   if (annonceActuelle.value?.mediaType === 'image' || annonceActuelle.value?.mediaType === 'pdf') {
     startTimer()
   }
 }
 
 const onVideoLoaded = () => {
-  console.log('Vidéo chargée:', annonceActuelle.value?.nom)
+  console.log('✅ Vidéo chargée:', annonceActuelle.value?.nom)
   if (videoPlayer.value && !isPaused.value) {
-    videoPlayer.value.play()
+    videoPlayer.value.play().catch(err => {
+      console.error('❌ Erreur lecture vidéo:', err)
+      // En cas d'erreur, passer au suivant après 2 secondes
+      setTimeout(() => nextPage(), 2000)
+    })
   }
 }
 
 const onVideoEnd = () => {
-  console.log('Vidéo terminée')
+  console.log('🎬 Vidéo terminée')
   if (!annonceActuelle.value?.loop) {
     nextPage()
   }
 }
 
 const onMediaError = (error) => {
-  console.error('Erreur média:', error)
-  // Passer au média suivant après 3 secondes en cas d'erreur
+  console.error('❌ Erreur média:', error)
+  console.log('⚠️ Le média ne peut pas être chargé - passage au suivant...')
+  // Passer au média suivant après 2 secondes en cas d'erreur
   setTimeout(() => {
     nextPage()
-  }, 3000)
+  }, 2000)
+}
+
+// 🆕 NOUVEAU : Gestion de la sortie de veille
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    console.log('👀 Page visible - Vérification des médias...')
+    
+    // Recharger les annonces au cas où les liens blob auraient expiré
+    rechargerAnnonces()
+    
+    // Relancer la vidéo si nécessaire
+    if (videoPlayer.value && annonceActuelle.value?.mediaType === 'video') {
+      videoPlayer.value.load() // Recharger la vidéo
+      if (!isPaused.value) {
+        videoPlayer.value.play().catch(err => {
+          console.error('❌ Erreur relance vidéo après veille:', err)
+        })
+      }
+    }
+  }
 }
 
 // Watchers
@@ -239,6 +290,9 @@ onMounted(() => {
     startTimer()
   }
 
+  // 🆕 NOUVEAU : Écouter les changements de visibilité (sortie de veille)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  
   // Gestion des raccourcis clavier (optionnel)
   window.addEventListener('keydown', handleKeyPress)
 })
@@ -248,6 +302,7 @@ onUnmounted(() => {
     clearTimeout(currentTimer.value)
   }
   annonceStore.arreterLecture()
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('keydown', handleKeyPress)
 })
 
@@ -265,6 +320,12 @@ const handleKeyPress = (e) => {
     case ' ':
       e.preventDefault()
       togglePause()
+      break
+    case 'r':
+    case 'R':
+      // 🆕 Raccourci clavier pour recharger (touche R)
+      e.preventDefault()
+      rechargerAnnonces()
       break
   }
 }

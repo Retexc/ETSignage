@@ -259,7 +259,7 @@ const gererUploadFichier = (event) => {
           @click="pageActive = annonce.id"
         >
           <!-- Boutons pour réorganiser -->
-          <div class="flex flex-col mr-3">
+          <div class="flex flex-col mr-2">
             <button
               @click.stop="monter(index)"
               :disabled="index === 0"
