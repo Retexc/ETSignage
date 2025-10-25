@@ -220,10 +220,10 @@ def fetch_stm_route_specific_alerts(routes_of_interest=None):
         List of route-specific alerts that explicitly mention your specific stop IDs
     """
     if routes_of_interest is None:
-        routes_of_interest = ["171", "180", "164"]  
+        routes_of_interest = ["61", "36"]  
     
 
-    your_stop_ids = ["50270", "62374", "62420"]
+    your_stop_ids = ["52744", "52743", "62355", "62248"]
     
     alerts_data = fetch_stm_alerts()
     if not alerts_data:
