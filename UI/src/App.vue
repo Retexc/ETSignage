@@ -9,7 +9,7 @@ import './style.css'
 <template>
   <div id="app" class="flex min-h-screen bg-[#F0F0F0]">
     <!-- only render sidebar if NOT on /login -->
-    <Sidebar v-if="$route.path !== '/display' && $route.path !== '/loading'" />
+    <Sidebar v-if="$route.path !== '/display' && $route.path !== '/Editor'" />
 
     <!-- render current page -->
     <div class="flex-1 overflow-auto bg-[#F0F0F0]"><router-view /></div>

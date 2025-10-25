@@ -51,53 +51,6 @@ const colorsFromStorage = computed(() => {
 
 const backgroundColor = computed(() => colorsFromStorage.value.backgroundColor);
 
-const handleLoadingComplete = () => {
-  console.log("Loading complete event received!");
-  showLoading.value = false;
-
-  // Start timer for transition to EndDisplay using configurable time
-  displayTimer = setTimeout(() => {
-    startTransitionToEnd();
-  }, displayTimeMs.value);
-
-  console.log(
-    `Display timer set for ${displayTimeMinutes.value} minutes (${displayTimeMs.value}ms)`
-  );
-};
-
-const startTransitionToEnd = () => {
-  console.log("Starting transition to End Display");
-  isTransitioning.value = true;
-  overlayComplete.value = false;
-
-  yellowSlide.value = -100;
-  whiteSlide.value = -120;
-
-  setTimeout(() => {
-    yellowSlide.value = 100;
-    whiteSlide.value = 0;
-  }, 50);
-
-  // Switch to EndDisplay when slides cover the screen
-  setTimeout(() => {
-    console.log("Slides covering screen - switching to End Display");
-    showEndDisplay.value = true;
-  }, 650);
-
-  // Fade out overlay
-  setTimeout(() => {
-    console.log("Starting overlay fade out");
-    overlayComplete.value = true;
-  }, 1250);
-
-  // Complete transition
-  setTimeout(() => {
-    console.log("Transition complete");
-    isTransitioning.value = false;
-    yellowSlide.value = -100;
-    whiteSlide.value = -120;
-  }, 2050);
-};
 
 const watchLocalStorage = () => {
   setInterval(() => {
@@ -147,28 +100,8 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="app-container">
-    <Announcement v-if="!showEndDisplay" />
-    <EndDisplay v-else />
-    <Loading v-if="showLoading" @loading-complete="handleLoadingComplete" />
+<announcement></announcement>
 
-    <!-- Transition slides -->
-    <div
-      v-if="isTransitioning"
-      class="fixed inset-0 z-50 overflow-hidden pointer-events-none transition-overlay"
-      :class="{ 'fade-out': overlayComplete }"
-    >
-      <div
-        class="absolute h-full w-full bg-white transition-transform duration-1200 ease-in-out"
-        :style="{ transform: `translateX(${yellowSlide}%)` }"
-      ></div>
-      <div
-        class="absolute h-full w-full bg-white transition-transform duration-1200 ease-in-out"
-        :style="{
-          transform: `translateX(${whiteSlide}%)`,
-          backgroundColor: backgroundColor,
-        }"
-      ></div>
-    </div>
   </div>
 </template>
 

@@ -8,6 +8,7 @@ import Display from "./views/MainDisplay.vue";
 import Loading from "./views/Loading.vue";
 import EndDisplay from "./views/EndDisplay.vue";
 import TitleCard from "./views/TitleCard.vue";
+import Editor from "./views/Editor.vue";
 const routes = [
   { path: "/console", component: Console },
   { path: "/board", component: Board },
@@ -17,6 +18,7 @@ const routes = [
   { path: "/loading", component: Loading },
   { path: "/end_display", component: EndDisplay },
   { path: "/title_card", component: TitleCard },
+  { path: "/editor", component: Editor },  
   { path: "/", redirect: "/console" },
 ];
 

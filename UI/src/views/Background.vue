@@ -167,7 +167,7 @@ function handleOverlayChange(e) {
 
 <template>
   <motion.div
-    class="flex max-h-screen bg-[#0f0f0f]"
+    class="flex max-h-screen bg-[#f0f0f0]"
     :initial="{ opacity: 0, y: 20, filter: 'blur(10px)' }"
     :animate="{
       opacity: 1,
@@ -180,8 +180,8 @@ function handleOverlayChange(e) {
       <!-- Header -->
       <div class="flex items-center justify-between w-full">
         <div class="space-y-1 w-full">
-          <h2 class="text-4xl font-bold text-white">Fond d'écran</h2>
-          <p class="text-xl text-white">
+          <h2 class="text-4xl font-bold text-black">Fond d'écran</h2>
+          <p class="text-xl text-black">
             Modifier l'arrière-plan du tableau d'affichage
           </p>
           <hr class="border-t border-[#404040] mt-3" />
@@ -213,14 +213,14 @@ function handleOverlayChange(e) {
           ></div>
           
           <!-- Overlay percentage indicator -->
-          <div class="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-sm px-2 py-1 rounded">
+          <div class="absolute bottom-2 right-2 bg-white bg-opacity-50 text-black text-sm px-2 py-1 rounded">
             {{ Math.round(overlayOpacity * 100) }}%
           </div>
         </div>
 
         <!-- recent images + import button -->
-        <div class="flex-1 flex flex-col space-y-2 gap-4 bg-gray-700 rounded p-6">
-          <h2 class="text-2xl font-bold text-white">Images récentes</h2>
+        <div class="flex-1 flex flex-col space-y-2 gap-4 bg-gray-300 rounded p-6">
+          <h2 class="text-2xl font-bold text-black">Images récentes</h2>
 
           <!-- if there are recent images, show them -->
           <div
@@ -251,7 +251,7 @@ function handleOverlayChange(e) {
 
       <!-- Settings -->
       <div class="flex flex-col gap-4">
-        <h2 class="text-2xl font-bold text-white">Paramètres</h2>
+        <h2 class="text-2xl font-bold text-black">Paramètres</h2>
         <hr class="border-t border-[#404040] mt-3" />
 
         <ImageSelectorField
@@ -262,9 +262,9 @@ function handleOverlayChange(e) {
 
         <!-- Dark Overlay Control -->
         <div class="flex flex-col gap-2">
-          <label class="text-white font-medium">Superposition sombre</label>
+          <label class="text-black font-medium">Superposition sombre</label>
           <div class="flex items-center gap-4">
-            <span class="text-white text-sm">0%</span>
+            <span class="text-black text-sm">0%</span>
             <input
               type="range"
               min="0"
@@ -272,23 +272,23 @@ function handleOverlayChange(e) {
               step="0.05"
               :value="overlayOpacity"
               @input="handleOverlayChange"
-              class="flex-1 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer
+              class="flex-1 h-2 bg-gray-400 rounded-lg appearance-none cursor-pointer
                      [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 
-                     [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500 
+                     [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-red-500 
                      [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 
-                     [&::-webkit-slider-thumb]:border-blue-800
+                     [&::-webkit-slider-thumb]:border-red-800
                      [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full 
-                     [&::-moz-range-thumb]:bg-blue-500 [&::-moz-range-thumb]:cursor-pointer 
+                     [&::-moz-range-thumb]:bg-red-500 [&::-moz-range-thumb]:cursor-pointer 
                      [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-blue-800
                      [&::-webkit-slider-track]:bg-gray-600 [&::-webkit-slider-track]:h-2 [&::-webkit-slider-track]:rounded
                      [&::-moz-range-track]:bg-gray-600 [&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded"
             />
-            <span class="text-white text-sm">100%</span>
-            <div class="text-white text-sm font-medium min-w-[3rem]">
+            <span class="text-black text-sm">100%</span>
+            <div class="text-black text-sm font-medium min-w-[3rem]">
               {{ Math.round(overlayOpacity * 100) }}%
             </div>
           </div>
-          <p class="text-gray-400 text-sm">
+          <p class="text-black-400 text-sm">
             Ajustez l'opacité de la superposition sombre appliquée au fond d'écran
           </p>
         </div>

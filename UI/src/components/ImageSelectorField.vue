@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- Label -->
-    <label class="block text-lg font-bold text-white mb-2 ">
+    <label class="block text-lg font-bold text-black mb-2 ">
       Image
     </label>
 
@@ -13,7 +13,7 @@
         type="text"
         readonly
         placeholder="Aucune image sélectionnée"
-        class="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none"
+        class="flex-1 px-3 py-2 bg-gray-300  rounded-lg text-black focus:outline-none"
       />
 
       <!-- opens OS file picker -->

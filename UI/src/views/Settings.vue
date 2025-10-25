@@ -169,7 +169,7 @@ function getCurrentUpdateState() {
 
 <template>
   <motion.div
-    class="flex max-h-screen bg-[#0f0f0f]"
+    class="flex max-h-screen bg-[#f0f0f0]"
     :initial="{ opacity: 0, y: 20, filter: 'blur(10px)' }"
     :animate="{
       opacity: 1,
@@ -180,8 +180,8 @@ function getCurrentUpdateState() {
   >
     <div class="flex-1 flex flex-col p-6 space-y-6 mt-18 ml-5 mr-5">
       <div class="space-y-1 w-full">
-        <h2 class="text-4xl font-bold text-white">Paramètres</h2>
-        <p class="text-xl text-white">
+        <h2 class="text-4xl font-bold text-black">Paramètres</h2>
+        <p class="text-xl text-black">
           Modifier les paramètres de l'application
         </p>
 
@@ -211,10 +211,10 @@ function getCurrentUpdateState() {
       <!-- ──────── Tab Panels ──────── -->
       <div class="mt-4">
         <div v-if="active === 'gtfs'">
-          <div class="bg-gray-900 rounded-lg p-6 mb-6 text-white space-y-4">
+          <div class="bg-gray-300 rounded-lg p-6 mb-6 text-black space-y-4">
             <h3 class="text-xl font-semibold">
               Les fichiers GTFS contiennent les horaires et les informations des
-              autobus et des trains Exo. Il est nécessaire de les mettre à jour
+              autobus de la STM. Il est nécessaire de les mettre à jour
               régulièrement.
             </h3>
             <p>
@@ -230,20 +230,11 @@ function getCurrentUpdateState() {
                 <a
                   href="https://www.stm.info/fr/a-propos/developpeurs"
                   target="_blank"
-                  class="text-white underline hover:text-blue-400"
+                  class="text-black underline hover:text-blue-400"
                 >
                   STM : Développeurs | Société de transport de Montréal
                 </a>
-              </li>
-              <li>
-                <a
-                  href="https://exo.quebec/fr/a-propos/donnees-ouvertes"
-                  target="_blank"
-                  class="text-white underline hover:text-blue-400"
-                >
-                  Exo : Autobus, trains et transport adapté dans la région de
-                  Montréal
-                </a>
+
               </li>
             </ul>
           </div>
@@ -261,33 +252,16 @@ function getCurrentUpdateState() {
                 @done="(file) => uploadGTFS('stm', file)"
                 @error="(err) => console.error('STM import error', err)"
               />
-              <p class="text-sm text-white">
+              <p class="text-sm text-black">
                 Dernière mise à jour : {{ stmLastUpdate }}
               </p>
             </div>
 
-            <img
-              src="../assets/images/exo.svg"
-              alt="Exo logo"
-              class="gtfs-logo mb-3 h-8 self-start"
-            />
-            <hr class="border-t border-[#404040] mt-3" />
-            <div class="flex flex-col space-y-2">
-              <ImportField
-                transport="exo"
-                placeholder="GTFS EXO (.zip)"
-                @done="(file) => uploadGTFS('exo', file)"
-                @error="(err) => console.error('EXO import error', err)"
-              />
-              <p class="text-sm text-white">
-                Dernière mise à jour : {{ exoLastUpdate }}
-              </p>
-            </div>
           </div>
         </div>
         <div v-else-if="active === 'update'">
           <div
-            class="bg-gray-900 rounded-lg p-6 mb-6 text-white space-y-4 flex flex-row items-center justify-between"
+            class="bg-gray-300 rounded-lg p-6 mb-6 text-black space-y-4 flex flex-row items-center justify-between"
           >
             <div class="flex flex-row items-center gap-2 mb-0">
               <img
@@ -312,7 +286,7 @@ function getCurrentUpdateState() {
                   </template>
                   <template v-else>Statut inconnu</template>
                 </h3>
-                <p class="text-xl text-white">
+                <p class="text-xl text-black">
                   Dernière vérification : {{ updateState.lastChecked }}
                   <span v-if="updateState.available">
                     (nouvelle version disponible)
@@ -356,10 +330,10 @@ function getCurrentUpdateState() {
           </div>
           <div class="flex flex-row items-center gap-2 mb-0 justify-between">
             <div class="flex flex-col">
-              <h3 class="text-2xl font-bold text-white">
+              <h3 class="text-2xl font-bold text-black">
                 Mise à jour automatique
               </h3>
-              <p class="text-xl text-white">
+              <p class="text-xl text-black">
                 Heure durant laquelle l'application sera mise à jour
                 automatiquement tous les jours.
               </p>
@@ -367,20 +341,20 @@ function getCurrentUpdateState() {
             <input
               type="time"
               v-model="settings.autoUpdateTime"
-              class="h-10 w-1/10 rounded border-gray-300 text-white font-bold focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 bg-gray-600 px-5"
+              class="h-10 w-1/10 rounded border-gray-300 text-black font-bold focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 bg-gray-300 px-5"
             />
           </div>
         </div>
         <div v-else-if="active === 'about'">
           <div
-            class="bg-gray-900 rounded-2xl p-10 flex flex-row items-center justify-between space-x-8"
+            class="bg-gray-300 rounded-2xl p-10 flex flex-row items-center justify-between space-x-8"
           >
             <!-- left column: text info -->
             <div class="space-y-2">
-              <h2 class="text-2xl font-bold text-white">Higher Pierre</h2>
-              <p class="text-xl text-white">Designer graphique UX/UI</p>
-              <p class="text-xl text-white">Créateur de contenu multimédia</p>
-              <p class="text-xl text-white flex items-center">
+              <h2 class="text-2xl font-bold text-black">Higher Pierre</h2>
+              <p class="text-xl text-black">Designer UX/UI</p>
+              <p class="text-xl text-black">Créateur de contenu multimédia</p>
+              <p class="text-xl text-black flex items-center">
                 Fait avec
                 <span class="ml-2 text-red-500">❤️</span>
               </p>
@@ -411,7 +385,7 @@ function getCurrentUpdateState() {
                   href="https://github.com/Retexc"
                   target="_blank"
                   rel="noopener"
-                  class="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg transition"
+                  class="flex items-center px-4 py-2 bg-white hover:bg-gray-400 text-black rounded-lg transition"
                 >
                   <Github class="w-5 h-5" />
                   <span class="ml-2 font-medium">GitHub</span>
