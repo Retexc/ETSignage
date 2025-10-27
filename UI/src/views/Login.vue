@@ -1,24 +1,54 @@
 <script setup>
 import { ref } from "vue";
+import { useRouter } from "vue-router";
+import { useAuthStore } from "../stores/authStore";
 import { motion } from "motion-v";
-import logo from "../assets/images/logo.png";
-import bgImg from "../assets/images/268.jpg";
+import bgImg from "../assets/images/Login_bg.jpg";
 
-const username = ref("");
+// 🎯 Initialisation
+const router = useRouter();
+const authStore = useAuthStore();
+
+// 📝 Variables du formulaire
+const email = ref("");
 const password = ref("");
-const remember = ref(false);
 const loading = ref(false);
 const error = ref(null);
 
-function onSubmit() {
-  loading.value = true;
+// 🔐 FONCTION DE CONNEXION
+async function onSubmit() {
+  // Réinitialiser l'erreur
   error.value = null;
+  loading.value = true;
 
-  // ←– replace this with your real API call…
-  setTimeout(() => {
+  try {
+    // Appel au store pour se connecter
+    const result = await authStore.signIn(email.value, password.value);
+
+    if (result.success) {
+      // ✅ Connexion réussie !
+      console.log("✅ Connexion réussie, redirection...");
+      
+      // Rediriger vers la page d'accueil (ou où tu veux)
+      router.push("/");
+    } else {
+      // ❌ Erreur de connexion
+      console.error("❌ Erreur Supabase complète:", result.error);
+      error.value = result.error || "Identifiants incorrects";
+      
+      // Traduire les erreurs courantes en français
+      if (error.value.includes("Invalid login credentials")) {
+        error.value = "Email ou mot de passe incorrect";
+      } else if (error.value.includes("Email not confirmed")) {
+        error.value = "ERREUR SUPABASE: " + error.value + " - Vérifiez dans Supabase → Users que l'email est confirmé";
+      }
+    }
+  } catch (err) {
+    console.error("Erreur inattendue:", err);
+    error.value = "Une erreur est survenue. Réessayez.";
+  } finally {
     loading.value = false;
-    // e.g. this.$router.push("/home") on success
-  }, 1000);
+  }
 }
 </script>
 
@@ -32,10 +62,9 @@ function onSubmit() {
     :style="{ backgroundImage: `url(${bgImg})` }"
   >
     <div class="flex items-center justify-start h-screen">
-      <!-- BLACK CARD -->
-      <div class="bg-[#080913] w-2/5 h-full p-8 overflow-hidden flex flex-col">
-        <!-- 1) Top-left BdeB logo zone -->
-         <motion.div
+      <!-- WHITE CARD -->
+      <div class="bg-[#ffffff] w-2/5 h-full p-8 overflow-hidden flex flex-col">
+        <motion.div
           :initial="{ opacity: 0, y: 20, filter: 'blur(10px)' }"
           :animate="{
             opacity: 1,
@@ -44,14 +73,8 @@ function onSubmit() {
             transition: { duration: 1 },
           }"
         >
-        <img
-          src="../assets/icons/bdeb.svg"
-          alt="BdeB Logo"
-          class="w-48 h-24 self-start mt-2"
-        />      
-      </motion.div>
+        </motion.div>
 
-        <!-- 2) The rest of the screen, flexed to center -->
         <motion.div
           :initial="{ opacity: 0, y: 20, filter: 'blur(10px)' }"
           :animate="{
@@ -60,50 +83,70 @@ function onSubmit() {
             filter: 'blur(0px)',
             transition: { delay: 0.5, duration: 1 },
           }"
-          class="flex py-32 flex-col items-center justify-center space-y-6 w-full text-center"
+          class="flex py-32 px-12 flex-col items-center justify-center space-y-6 w-full text-left"
         >
           <img
-            src="../assets/icons/Go_logo.png"
-            alt="Go Logo"
-            class="w-24 h-24"
+            src="../assets/icons/ETS.svg"
+            alt="ETS Logo"
+            class="w-18 self-start mt-2 mb-8 drop-shadow-2xl"
           />
-          <div class="space-y-2">
-          <h1 class="text-4xl text-white font-bold">Bonjour</h1>
-          <p class="text-gray-300">Entrer votre identifiant de connexion</p>            
-          </div>
 
+          <img
+            src="../assets/icons/signage.svg"
+            alt="Signage Logo"
+            class="w-40 self-start mt-2 drop-shadow-2xl"
+          />
+
+          <!-- 🚨 MESSAGE D'ERREUR -->
+          <div
+            v-if="error"
+            class="w-full p-3 bg-red-100 border-2 border-red-500 text-red-700 rounded"
+          >
+            {{ error }}
+          </div>
 
           <!-- Form -->
           <form
             @submit.prevent="onSubmit"
-            class="w-full flex flex-col items-center space-y-6"
+            class="w-full flex flex-col items-left space-y-6 font-bold text-xl"
           >
+            <span>Email</span>
             <input
-              v-model="username"
-              type="text"
-              placeholder="Utilisateur"
+              v-model="email"
+              type="email"
+              placeholder="votre.email@etsmtl.ca"
               required
-              class="w-3/4 p-3 bg-transparent border-2 border-[#535353] rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ffcf25]"
+              :disabled="loading"
+              class="w-full p-3 bg-transparent border-2 border-[#535353] text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#E4022C] text-sm disabled:opacity-50"
             />
-
+            
+            <span>Mot de passe</span>
             <input
               v-model="password"
               type="password"
               placeholder="Mot de passe"
               required
-              class="w-3/4 p-3 bg-transparent border-2 border-[#535353] rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ffcf25]"
+              :disabled="loading"
+              class="w-full p-3 bg-transparent border-2 border-[#535353] text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#E4022C] text-sm disabled:opacity-50"
             />
 
             <button
               type="submit"
-              class="w-3/4 py-3 bg-yellow-400 hover:bg-yellow-500 text-black font-bold rounded-xl"
+              :disabled="loading"
+              class="w-full py-3 bg-[#E4022C] hover:bg-[#D5052C] text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              Se connecter
+              {{ loading ? "Connexion en cours..." : "Connexion" }}
             </button>
-          </form>      
-      </motion.div>
 
-        <!-- 3) Bottom-right footer -->
+            <!-- Lien vers mot de passe oublié -->
+            <router-link
+              to="/forgot-password"
+              class="text-sm text-[#E4022C] hover:underline self-center"
+            >
+              Mot de passe oublié ?
+            </router-link>
+          </form>
+        </motion.div>
       </div>
     </div>
   </div>

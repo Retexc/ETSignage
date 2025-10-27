@@ -28,12 +28,12 @@ export const useAnnonceStore = defineStore('annonce', {
   }),
 
   getters: {
-    // Obtenir les annonces avec média seulement
+
     annoncesAvecMedia: (state) => {
       return state.annonces.filter(a => a.media !== null)
     },
     
-    // Obtenir l'annonce actuellement affichée
+
     annonceActuelle: (state) => {
       const annoncesValides = state.annonces.filter(a => a.media !== null)
       if (annoncesValides.length === 0) return null
@@ -47,12 +47,12 @@ export const useAnnonceStore = defineStore('annonce', {
   },
 
   actions: {
-    // Ajouter une nouvelle annonce
+
     ajouterAnnonce(annonce) {
       this.annonces.push(annonce)
     },
     
-    // Mettre à jour une annonce existante
+  
     mettreAJourAnnonce(id, data) {
       const index = this.annonces.findIndex(a => a.id === id)
       if (index !== -1) {
@@ -68,12 +68,12 @@ export const useAnnonceStore = defineStore('annonce', {
       }
     },
     
-    // Remplacer toutes les annonces (depuis l'éditeur)
+   
     setAnnonces(annonces) {
       this.annonces = annonces
     },
     
-    // Passer à la page suivante
+
     pageSuivante() {
       const annoncesValides = this.annonces.filter(a => a.media !== null)
       if (annoncesValides.length > 0) {
@@ -81,7 +81,7 @@ export const useAnnonceStore = defineStore('annonce', {
       }
     },
     
-    // Aller à une page spécifique
+
     allerALaPage(index) {
       const annoncesValides = this.annonces.filter(a => a.media !== null)
       if (index >= 0 && index < annoncesValides.length) {
@@ -89,35 +89,35 @@ export const useAnnonceStore = defineStore('annonce', {
       }
     },
     
-    // Démarrer la lecture
+
     demarrerLecture() {
       this.isPlaying = true
       this.isPaused = false
     },
     
-    // Mettre en pause
+
     pauseLecture() {
       this.isPaused = true
     },
     
-    // Reprendre la lecture
+
     reprendreLecture() {
       this.isPaused = false
     },
     
-    // Arrêter la lecture
+
     arreterLecture() {
       this.isPlaying = false
       this.isPaused = false
       this.pageActuelle = 0
     },
     
-    // Sauvegarder dans localStorage
+
     sauvegarderLocal() {
       localStorage.setItem('annonces', JSON.stringify(this.annonces))
     },
     
-    // Charger depuis localStorage
+ 
     chargerLocal() {
       const saved = localStorage.getItem('annonces')
       if (saved) {

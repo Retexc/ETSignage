@@ -291,7 +291,7 @@ const gererUploadFichier = (event) => {
 
           <!-- Miniature avec indicateur de type -->
           <div
-            class="w-16 h-12 mr-3 rounded overflow-hidden bg-gray-200 flex items-center justify-center relative"
+            class="w-16 h-12  rounded overflow-hidden bg-gray-200 flex items-center justify-center relative"
           >
             <img
               v-if="annonce.media && annonce.mediaType === 'image'"
@@ -335,13 +335,7 @@ const gererUploadFichier = (event) => {
                 d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
               ></path>
             </svg>
-            <!-- Badge de type de média -->
-            <span
-              v-if="annonce.mediaType"
-              class="absolute -top-1 -right-1 text-xs bg-blue-500 text-white px-1 rounded"
-            >
-              {{ annonce.mediaType.toUpperCase() }}
-            </span>
+
           </div>
 
           <!-- Nom de la page -->

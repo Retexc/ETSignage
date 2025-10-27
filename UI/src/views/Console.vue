@@ -110,7 +110,7 @@ onBeforeUnmount(() => {
       }"
       class="flex-1"
     >
-      <ConsoleLog />
+
     </motion.div>
   </div>
 </template>

@@ -15,6 +15,7 @@
   "dependencies": {
     "@headlessui/vue": "^1.7.23",
     "@heroicons/vue": "^2.2.0",
+    "@supabase/supabase-js": "^2.76.1",
     "@tailwindcss/vite": "^4.1.11",
     "axios": "^1.10.0",
     "crossenv": "^0.0.2-security",
