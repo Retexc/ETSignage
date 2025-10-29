@@ -1,33 +1,161 @@
 <script>
 import { ref, computed, onMounted, watch } from "vue";
 import { useAnnonceStore } from '../stores/annonceStore.js'
+import draggable from 'vuedraggable'
 
 export default {
   name: "AnnonceEditorWithMedia",
+  components: {
+    draggable
+  },
   setup() {
-    // Utiliser le store Pinia
     const annonceStore = useAnnonceStore()
     
     const pageActive = ref(1);
     const fileInput = ref(null);
+    const isUploading = ref(false);
+    const editingPageId = ref(null);
+    const tempPageName = ref("");
+    
+    let db = null;
 
-    // Charger les annonces depuis le store au démarrage
-    onMounted(() => {
-      // Charger depuis localStorage si disponible
+    // INDEXEDDB : Initialiser la base de données
+    const initDB = () => {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open('AnnonceMediaDB', 1);
+        
+        request.onerror = () => {
+          console.error('❌ Erreur ouverture IndexedDB');
+          reject(request.error);
+        };
+        
+        request.onsuccess = () => {
+          db = request.result;
+          console.log('✅ IndexedDB initialisée');
+          resolve(db);
+        };
+        
+        request.onupgradeneeded = (event) => {
+          db = event.target.result;
+          
+          if (!db.objectStoreNames.contains('mediaFiles')) {
+            db.createObjectStore('mediaFiles', { keyPath: 'id' });
+            console.log('✅ Store mediaFiles créé');
+          }
+        };
+      });
+    };
+
+    // INDEXEDDB : Sauvegarder un fichier
+    const saveFileToIndexedDB = (id, file) => {
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(['mediaFiles'], 'readwrite');
+        const store = transaction.objectStore('mediaFiles');
+        
+        const data = {
+          id: id,
+          file: file,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          timestamp: Date.now()
+        };
+        
+        const request = store.put(data);
+        
+        request.onsuccess = () => {
+          console.log('✅ Fichier sauvegardé dans IndexedDB:', id);
+          resolve(id);
+        };
+        
+        request.onerror = () => {
+          console.error('❌ Erreur sauvegarde IndexedDB');
+          reject(request.error);
+        };
+      });
+    };
+
+    // INDEXEDDB : Récupérer un fichier
+    const getFileFromIndexedDB = (id) => {
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(['mediaFiles'], 'readonly');
+        const store = transaction.objectStore('mediaFiles');
+        const request = store.get(id);
+        
+        request.onsuccess = () => {
+          if (request.result) {
+            console.log('✅ Fichier récupéré depuis IndexedDB:', id);
+            resolve(request.result.file);
+          } else {
+            console.warn('⚠️ Fichier non trouvé:', id);
+            resolve(null);
+          }
+        };
+        
+        request.onerror = () => {
+          console.error('❌ Erreur récupération IndexedDB');
+          reject(request.error);
+        };
+      });
+    };
+
+    // INDEXEDDB : Supprimer un fichier
+    const deleteFileFromIndexedDB = (id) => {
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(['mediaFiles'], 'readwrite');
+        const store = transaction.objectStore('mediaFiles');
+        const request = store.delete(id);
+        
+        request.onsuccess = () => {
+          console.log('✅ Fichier supprimé de IndexedDB:', id);
+          resolve();
+        };
+        
+        request.onerror = () => {
+          console.error('❌ Erreur suppression IndexedDB');
+          reject(request.error);
+        };
+      });
+    };
+
+    // FONCTION : Charger les médias depuis IndexedDB
+    const loadMediaFromIndexedDB = async () => {
+      for (const annonce of annonces.value) {
+        if (annonce.media) {
+          try {
+            const file = await getFileFromIndexedDB(annonce.media);
+            if (file) {
+              annonce.mediaURL = URL.createObjectURL(file);
+            } else {
+              console.warn('⚠️ Média manquant pour:', annonce.nom);
+              annonce.media = null;
+              annonce.mediaURL = null;
+            }
+          } catch (error) {
+            console.error('❌ Erreur chargement média:', error);
+          }
+        }
+      }
+    };
+
+    // Charger les annonces
+    onMounted(async () => {
+      await initDB();
       annonceStore.chargerLocal()
       
-      // Si le store a des annonces, les utiliser
       if (annonceStore.annonces.length > 0) {
         annonces.value = [...annonceStore.annonces]
+        await loadMediaFromIndexedDB()
       }
     })
 
-    // Liste des annonces (locale à l'éditeur)
+    // Liste des annonces
     const annonces = ref([
       {
         id: 1,
         nom: "Page 1",
         media: null,
+        mediaURL: null,
         mediaType: null,
         mediaName: null,
         mediaSize: null,
@@ -40,24 +168,41 @@ export default {
       },
     ]);
 
-    // Synchroniser avec le store quand les annonces changent
+    // Synchroniser avec le store
     watch(annonces, (newAnnonces) => {
-      annonceStore.setAnnonces(newAnnonces)
-      annonceStore.sauvegarderLocal() // Sauvegarder automatiquement
+      const annoncesToSave = newAnnonces.map(a => {
+        const { mediaURL, ...rest } = a;
+        return rest;
+      });
+      annonceStore.setAnnonces(annoncesToSave)
+      annonceStore.sauvegarderLocal()
     }, { deep: true })
 
-    // Obtenir la page sélectionnée
     const pageSelectionnee = computed(() => {
       return annonces.value.find((a) => a.id === pageActive.value);
     });
 
-    // Ajouter une nouvelle page
+    const getNextPageNumber = () => {
+      const pageNumbers = annonces.value
+        .map(a => {
+          const match = a.nom.match(/Page (\d+)/)
+          return match ? parseInt(match[1]) : 0
+        })
+        .filter(num => num > 0)
+      
+      if (pageNumbers.length === 0) return 1
+      return Math.max(...pageNumbers) + 1
+    }
+
     const ajouterPage = () => {
       const nouvelId = Math.max(...annonces.value.map((a) => a.id), 0) + 1;
+      const nextPageNumber = getNextPageNumber();
+      
       const nouvellePage = {
         id: nouvelId,
-        nom: `Page ${nouvelId}`,
+        nom: `Page ${nextPageNumber}`,
         media: null,
+        mediaURL: null,
         mediaType: null,
         mediaName: null,
         mediaSize: null,
@@ -72,10 +217,18 @@ export default {
       pageActive.value = nouvelId;
     };
 
-    // Supprimer une page
-    const supprimerPage = (index) => {
+    const supprimerPage = async (id) => {
       if (annonces.value.length > 1) {
+        const index = annonces.value.findIndex(a => a.id === id);
         const pageASupprimer = annonces.value[index];
+        
+        if (pageASupprimer.media) {
+          await deleteFileFromIndexedDB(pageASupprimer.media);
+          if (pageASupprimer.mediaURL) {
+            URL.revokeObjectURL(pageASupprimer.mediaURL);
+          }
+        }
+        
         annonces.value.splice(index, 1);
 
         if (pageASupprimer.id === pageActive.value) {
@@ -86,75 +239,110 @@ export default {
       }
     };
 
-    // Monter une page
-    const monter = (index) => {
-      if (index > 0) {
-        const temp = annonces.value[index];
-        annonces.value[index] = annonces.value[index - 1];
-        annonces.value[index - 1] = temp;
-      }
-    };
+    const startEditingName = (annonce) => {
+      editingPageId.value = annonce.id
+      tempPageName.value = annonce.nom
+    }
 
-    // Descendre une page
-    const descendre = (index) => {
-      if (index < annonces.value.length - 1) {
-        const temp = annonces.value[index];
-        annonces.value[index] = annonces.value[index + 1];
-        annonces.value[index + 1] = temp;
+    const savePageName = (annonce) => {
+      if (tempPageName.value.trim()) {
+        annonce.nom = tempPageName.value.trim()
       }
-    };
+      editingPageId.value = null
+      tempPageName.value = ""
+    }
 
-    // Ouvrir le sélecteur de fichier
+    const cancelEditingName = () => {
+      editingPageId.value = null
+      tempPageName.value = ""
+    }
+
     const ouvrirSelecteurFichier = () => {
       fileInput.value?.click();
     };
 
-    // Gérer l'upload d'un fichier
-const gererUploadFichier = (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
+    const gererUploadFichier = async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      if (!pageSelectionnee.value) return;
 
-  if (!pageSelectionnee.value) return;
+      try {
+        isUploading.value = true;
+        console.log('📤 Upload du fichier:', file.name);
 
-  // Déterminer le type de média
-  let mediaType = null;
-  if (file.type.startsWith("image/")) {
-    mediaType = "image";
-  } else if (file.type.startsWith("video/")) {
-    mediaType = "video";
-  } else if (file.type === "application/pdf") {
-    mediaType = "pdf";
-  }
+        const maxSize = 500 * 1024 * 1024;
+        if (file.size > maxSize) {
+          alert(`Le fichier est trop volumineux (max 500MB). Taille: ${formatFileSize(file.size)}`);
+          isUploading.value = false;
+          event.target.value = "";
+          return;
+        }
 
-  // ✅ Utiliser un URL Blob au lieu de FileReader
-  const fileURL = URL.createObjectURL(file);
+        let mediaType = null;
+        if (file.type.startsWith("image/")) {
+          mediaType = "image";
+        } else if (file.type.startsWith("video/")) {
+          mediaType = "video";
+        } else if (file.type === "application/pdf") {
+          mediaType = "pdf";
+        } else {
+          alert("Type de fichier non supporté");
+          isUploading.value = false;
+          event.target.value = "";
+          return;
+        }
 
-  // Mettre à jour la page
-  pageSelectionnee.value.media = fileURL;
-  pageSelectionnee.value.mediaType = mediaType;
-  pageSelectionnee.value.mediaName = file.name;
-  pageSelectionnee.value.mediaSize = file.size;
+        if (pageSelectionnee.value.media) {
+          await deleteFileFromIndexedDB(pageSelectionnee.value.media);
+          if (pageSelectionnee.value.mediaURL) {
+            URL.revokeObjectURL(pageSelectionnee.value.mediaURL);
+          }
+        }
 
-  // Si c’est une vidéo → calculer la durée
-  if (mediaType === "video") {
-    const video = document.createElement("video");
-    video.src = fileURL;
-    video.onloadedmetadata = () => {
-      if (pageSelectionnee.value) {
-        pageSelectionnee.value.dureeAffichage = Math.round(video.duration);
+        const fileId = `media_${pageSelectionnee.value.id}_${Date.now()}`;
+        await saveFileToIndexedDB(fileId, file);
+        const blobURL = URL.createObjectURL(file);
+        
+        console.log('✅ Fichier sauvegardé avec ID:', fileId);
+
+        pageSelectionnee.value.media = fileId;
+        pageSelectionnee.value.mediaURL = blobURL;
+        pageSelectionnee.value.mediaType = mediaType;
+        pageSelectionnee.value.mediaName = file.name;
+        pageSelectionnee.value.mediaSize = file.size;
+
+        if (mediaType === "video") {
+          const video = document.createElement("video");
+          video.src = blobURL;
+          video.onloadedmetadata = () => {
+            if (pageSelectionnee.value) {
+              pageSelectionnee.value.dureeAffichage = Math.round(video.duration);
+            }
+          };
+        }
+
+        console.log('✅ Média importé avec succès!');
+        
+      } catch (error) {
+        console.error('❌ Erreur lors de l\'upload:', error);
+        alert('Erreur lors de l\'upload du fichier');
+      } finally {
+        isUploading.value = false;
+        event.target.value = "";
       }
     };
-  }
 
-  // Reset input pour pouvoir recharger le même fichier ensuite
-  event.target.value = "";
-};
-
-
-    // Supprimer le média
-    const supprimerMedia = () => {
+    const supprimerMedia = async () => {
       if (pageSelectionnee.value) {
+        if (pageSelectionnee.value.media) {
+          await deleteFileFromIndexedDB(pageSelectionnee.value.media);
+        }
+        if (pageSelectionnee.value.mediaURL) {
+          URL.revokeObjectURL(pageSelectionnee.value.mediaURL);
+        }
+        
         pageSelectionnee.value.media = null;
+        pageSelectionnee.value.mediaURL = null;
         pageSelectionnee.value.mediaType = null;
         pageSelectionnee.value.mediaName = null;
         pageSelectionnee.value.mediaSize = null;
@@ -162,7 +350,6 @@ const gererUploadFichier = (event) => {
       }
     };
 
-    // Formater la taille du fichier
     const formatFileSize = (bytes) => {
       if (bytes === 0) return "0 Bytes";
       const k = 1024;
@@ -176,10 +363,14 @@ const gererUploadFichier = (event) => {
       pageActive,
       pageSelectionnee,
       fileInput,
+      isUploading,
+      editingPageId,
+      tempPageName,
       ajouterPage,
       supprimerPage,
-      monter,
-      descendre,
+      startEditingName,
+      savePageName,
+      cancelEditingName,
       ouvrirSelecteurFichier,
       gererUploadFichier,
       supprimerMedia,
@@ -188,408 +379,175 @@ const gererUploadFichier = (event) => {
   },
 };
 </script>
+
 <template>
-  <div
-    class="flex flex-row justify-between items-center bg-white p-2 py-4 drop-shadow-xl"
-  >
+  <div class="flex flex-row justify-between items-center bg-white p-2 py-4 drop-shadow-xl">
     <div class="flex flex-row items-center mr-6 p-2">
-      <router-link
-        to="/"
-        class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-2 rounded-lg inline-flex items-center"
-      >
-        <svg
-          class="w-6 h-6 text-gray-800 dark:text-gray-700"
-          aria-hidden="true"
-          xmlns="http://www.w3.org/2000/svg"
-          width="24"
-          height="24"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke="currentColor"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="m4 12 8-8 8 8M6 10.5V19a1 1 0 0 0 1 1h3v-3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3h3a1 1 0 0 0 1-1v-8.5"
-          />
+      <router-link to="/" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-2 rounded-lg inline-flex items-center">
+        <svg class="w-6 h-6 text-gray-800 dark:text-gray-700" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+          <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m4 12 8-8 8 8M6 10.5V19a1 1 0 0 0 1 1h3v-3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3h3a1 1 0 0 0 1-1v-8.5" />
         </svg>
       </router-link>
-
       <div class="flex flex-row items-center gap-4">
         <img src="../assets/icons/ETS.svg" alt="Bdeblogo" class="w-12 ml-6" />
         <h1 class="text-black font-bold text-2xl">Editeur d'annonces</h1>
       </div>
     </div>
   </div>
+
   <div class="flex h-screen bg-gray-100">
-    <!-- Menu de gauche -->
-    <div class="w-100 bg-white shadow-lg p-4 overflow-y-auto">
-      <!-- Bouton Ajouter -->
-      <button
-        @click="ajouterPage"
-        class="w-full mb-4 py-3 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center justify-center transition-colors"
-      >
-        <svg
-          class="w-5 h-5 mr-2"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 4v16m8-8H4"
-          ></path>
+    <!-- Menu gauche -->
+    <div class="w-80 bg-white shadow-lg p-4 flex flex-col">
+      <button @click="ajouterPage" class="w-full mb-4 py-3 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center justify-center transition-colors">
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
         </svg>
         Ajouter une page
       </button>
 
-      <!-- Liste des annonces -->
-      <div class="space-y-2">
-        <div
-          v-for="(annonce, index) in annonces"
-          :key="annonce.id"
-          class="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-          :class="{
-            'bg-gray-800 text-white hover:bg-gray-700':
-              annonce.id === pageActive,
-          }"
-          @click="pageActive = annonce.id"
-        >
-          <!-- Boutons pour réorganiser -->
-          <div class="flex flex-col mr-2">
-            <button
-              @click.stop="monter(index)"
-              :disabled="index === 0"
-              class="p-1 hover:bg-gray-200 rounded disabled:opacity-30 disabled:cursor-not-allowed"
-              :class="annonce.id === pageActive ? 'hover:bg-gray-600' : ''"
-            >
-              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z"
-                />
-              </svg>
-            </button>
-            <button
-              @click.stop="descendre(index)"
-              :disabled="index === annonces.length - 1"
-              class="p-1 hover:bg-gray-200 rounded disabled:opacity-30 disabled:cursor-not-allowed"
-              :class="annonce.id === pageActive ? 'hover:bg-gray-600' : ''"
-            >
-              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                />
-              </svg>
-            </button>
-          </div>
+      <div class="flex-1 overflow-hidden">
+        <draggable v-model="annonces" item-key="id" class="space-y-2 h-full" :animation="200" handle=".drag-handle">
+          <template #item="{ element: annonce }">
+            <div :class="['p-3 rounded-lg cursor-pointer transition-all', pageActive === annonce.id ? 'bg-blue-100 border-2 border-blue-500' : 'bg-gray-50 hover:bg-gray-100']" @click="pageActive = annonce.id">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center flex-1 min-w-0">
+                  <svg class="w-5 h-5 text-gray-400 mr-2 drag-handle cursor-move flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+                  </svg>
 
-          <!-- Numéro -->
-          <span class="font-bold mr-3 text-lg">{{ index + 1 }}</span>
+                  <svg v-if="!annonce.media" class="w-6 h-6 text-gray-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                  </svg>
+                  <svg v-else-if="annonce.mediaType === 'image'" class="w-6 h-6 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"></path>
+                  </svg>
+                  <svg v-else-if="annonce.mediaType === 'video'" class="w-6 h-6 text-red-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"></path>
+                  </svg>
+                  <svg v-else-if="annonce.mediaType === 'pdf'" class="w-6 h-6 text-blue-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                  </svg>
 
-          <!-- Miniature avec indicateur de type -->
-          <div
-            class="w-16 h-12  rounded overflow-hidden bg-gray-200 flex items-center justify-center relative"
-          >
-            <img
-              v-if="annonce.media && annonce.mediaType === 'image'"
-              :src="annonce.media"
-              class="w-full h-full object-cover"
-            />
-            <!-- Icône PDF -->
-            <svg
-              v-else-if="annonce.mediaType === 'pdf'"
-              class="w-8 h-8 text-red-500"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M10,19L12,15H13L15,19H13.5L13.1,18H11.9L11.5,19H10M11.3,16.8L12,15.6L12.7,16.8H11.3Z"
-              />
-            </svg>
-            <!-- Icône Vidéo -->
-            <svg
-              v-else-if="annonce.mediaType === 'video'"
-              class="w-8 h-8 text-blue-500"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                d="M17,10.5V7A1,1 0 0,0 16,6H4A1,1 0 0,0 3,7V17A1,1 0 0,0 4,18H16A1,1 0 0,0 17,17V13.5L21,17.5V6.5L17,10.5Z"
-              />
-            </svg>
-            <!-- Icône par défaut -->
-            <svg
-              v-else
-              class="w-8 h-8 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              ></path>
-            </svg>
+                  <div class="flex-1 min-w-0">
+                    <input v-if="editingPageId === annonce.id" v-model="tempPageName" @click.stop @keyup.enter="savePageName(annonce)" @keyup.esc="cancelEditingName" @blur="savePageName(annonce)" class="w-full px-2 py-1 text-sm font-medium border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" autofocus />
+                    <p v-else @dblclick.stop="startEditingName(annonce)" class="font-medium text-sm truncate cursor-text" :title="'Double-cliquez pour renommer'">{{ annonce.nom }}</p>
+                    <p v-if="annonce.media" class="text-xs text-gray-500 truncate">{{ annonce.mediaName }}</p>
+                  </div>
+                </div>
 
-          </div>
-
-          <!-- Nom de la page -->
-          <input
-            v-model="annonce.nom"
-            class="flex-1 bg-transparent outline-none px-2 py-1 rounded"
-            :class="annonce.id === pageActive ? 'text-white' : 'text-gray-700'"
-            placeholder="Nom de la page"
-            @click.stop
-          />
-
-          <!-- Bouton supprimer -->
-          <button
-            @click.stop="supprimerPage(index)"
-            class="ml-2 p-1 hover:bg-red-500 hover:text-white rounded transition-colors"
-          >
-            <svg
-              class="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
-              ></path>
-            </svg>
-          </button>
-        </div>
+                <div class="flex items-center space-x-1 ml-2 flex-shrink-0">
+                  <button v-if="editingPageId !== annonce.id" @click.stop="startEditingName(annonce)" class="p-1 hover:bg-blue-100 rounded text-blue-500" title="Renommer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                  </button>
+                  <button @click.stop="supprimerPage(annonce.id)" class="p-1 hover:bg-red-100 rounded text-red-500" title="Supprimer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </template>
+        </draggable>
       </div>
     </div>
 
-    <!-- Zone principale d'aperçu -->
-    <div class="flex-1 p-8">
-      <div class="bg-white rounded-lg shadow-lg h-full flex flex-col">
-        <!-- Header de la zone d'aperçu -->
-        <div class="p-4 border-b bg-gray-50">
-          <h3 class="text-lg font-semibold">
-            Aperçu - {{ pageSelectionnee?.nom || "Aucune page sélectionnée" }}
-          </h3>
-        </div>
+    <!-- Zone centrale -->
+    <div class="flex-1 flex flex-col">
+      <div class="bg-white shadow-md p-4">
+        <h2 class="text-2xl font-bold text-gray-800">{{ pageSelectionnee?.nom || "Aperçu" }}</h2>
+      </div>
 
-        <!-- Zone de contenu -->
-        <div class="flex-1 p-8 flex items-center justify-center">
-          <!-- Si un média est présent -->
-          <div
-            v-if="pageSelectionnee?.media"
-            class="w-full h-full flex items-center justify-center"
-          >
-            <!-- Aperçu Image -->
-            <img
-              v-if="pageSelectionnee.mediaType === 'image'"
-              :src="pageSelectionnee.media"
-              class="max-w-full max-h-full object-contain rounded-lg shadow-lg"
-              alt="Aperçu"
-            />
-
-            <!-- Aperçu PDF -->
-            <div
-              v-else-if="pageSelectionnee.mediaType === 'pdf'"
-              class="text-center"
-            >
-              <svg
-                class="w-32 h-32 text-red-500 mx-auto mb-4"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M10,19L12,15H13L15,19H13.5L13.1,18H11.9L11.5,19H10M11.3,16.8L12,15.6L12.7,16.8H11.3Z"
-                />
+      <div class="flex-1 flex flex-col p-8">
+        <div class="flex-1 bg-white rounded-lg shadow-lg flex items-center justify-center overflow-hidden relative">
+          <div v-if="isUploading" class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="text-center">
+              <svg class="animate-spin h-16 w-16 text-white mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              <p class="text-gray-600 mb-2">Document PDF</p>
-              <p class="text-sm text-gray-500">
-                {{ pageSelectionnee.mediaName }}
-              </p>
-              <!-- Tu pourrais ajouter un embed PDF ici si nécessaire -->
-              <iframe
-                v-if="pageSelectionnee.media"
-                :src="pageSelectionnee.media"
-                class="w-full h-96 mt-4 border rounded"
-              ></iframe>
+              <p class="text-white text-lg font-semibold">Sauvegarde en cours...</p>
             </div>
-
-            <!-- Aperçu Vidéo -->
-            <video
-              v-else-if="pageSelectionnee.mediaType === 'video'"
-              :src="pageSelectionnee.media"
-              controls
-              class="max-w-full max-h-full rounded-lg shadow-lg"
-            >
-              Votre navigateur ne supporte pas la lecture de vidéos.
-            </video>
           </div>
 
-          <!-- Si aucun média -->
-          <div v-else class="text-center">
-            <svg
-              class="w-24 h-24 text-gray-300 mx-auto mb-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              ></path>
+          <div v-if="pageSelectionnee?.mediaURL && !isUploading" class="w-full h-full flex items-center justify-center">
+            <img v-if="pageSelectionnee.mediaType === 'image'" :src="pageSelectionnee.mediaURL" :alt="pageSelectionnee.mediaName" class="max-w-full max-h-full object-contain" />
+            <div v-else-if="pageSelectionnee.mediaType === 'pdf'" class="w-full h-full flex flex-col items-center justify-center p-4">
+              <iframe :src="pageSelectionnee.mediaURL" class="w-full h-96 mt-4 border rounded"></iframe>
+            </div>
+            <video v-else-if="pageSelectionnee.mediaType === 'video'" :src="pageSelectionnee.mediaURL" controls class="max-w-full max-h-full rounded-lg shadow-lg"></video>
+          </div>
+
+          <div v-else-if="!isUploading" class="text-center">
+            <svg class="w-24 h-24 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
             </svg>
             <p class="text-gray-500 mb-6">Aucun média ajouté</p>
           </div>
         </div>
 
-        <!-- Zone des boutons d'action -->
-        <div class="p-6 border-t bg-gray-50">
-          <div class="flex justify-center space-x-4">
-            <!-- Bouton pour importer un média -->
-            <button
-              v-if="pageSelectionnee"
-              @click="ouvrirSelecteurFichier"
-              class="px-6 py-3 bg-pink-500 hover:bg-pink-600 text-white rounded-lg flex items-center transition-colors shadow-md"
-            >
-              <svg
-                class="w-5 h-5 mr-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 4v16m8-8H4"
-                ></path>
+        <div class="mt-6 bg-white p-6 rounded-lg shadow-lg">
+          <div class="flex justify-center space-x-4 mb-4">
+            <button v-if="pageSelectionnee" @click="ouvrirSelecteurFichier" :disabled="isUploading" class="px-6 py-3 bg-pink-500 hover:bg-pink-600 text-white rounded-lg flex items-center transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
               </svg>
               Importer un média
             </button>
-
-            <!-- Bouton pour supprimer le média -->
-            <button
-              v-if="pageSelectionnee?.media"
-              @click="supprimerMedia"
-              class="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg flex items-center transition-colors shadow-md"
-            >
-              <svg
-                class="w-5 h-5 mr-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                ></path>
+            <button v-if="pageSelectionnee?.media" @click="supprimerMedia" :disabled="isUploading" class="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg flex items-center transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
               </svg>
               Supprimer le média
             </button>
           </div>
 
-          <!-- Info sur les formats acceptés -->
-          <p class="text-center text-sm text-gray-500 mt-4">
-            Formats acceptés : Images (JPG, PNG, GIF), Vidéos (MP4, WebM), PDF
-          </p>
+          <div class="text-center border-t pt-4">
+            <p class="text-sm text-gray-600 font-medium">Formats acceptés : Images (JPG, PNG, GIF), Vidéos (MP4, WebM), PDF</p>
+            <p class="text-xs text-gray-500 mt-1">Taille maximale : 500 MB</p>
+            <p class="text-xs text-green-600 mt-1 font-semibold">✅ Les fichiers sont sauvegardés de façon permanente</p>
+          </div>
         </div>
       </div>
 
-      <!-- Input file caché -->
-      <input
-        ref="fileInput"
-        type="file"
-        @change="gererUploadFichier"
-        accept="image/*,video/*,application/pdf"
-        class="hidden"
-      />
+      <input ref="fileInput" type="file" @change="gererUploadFichier" accept="image/*,video/*,application/pdf" class="hidden" />
     </div>
 
-    <!-- Panneau de propriétés -->
+    <!-- Panneau propriétés -->
     <div class="w-80 bg-white shadow-lg p-6 overflow-y-auto">
       <h2 class="text-xl font-bold mb-6">Propriétés</h2>
 
       <div v-if="pageSelectionnee">
-        <!-- Info sur le média -->
-        <div
-          v-if="pageSelectionnee.media"
-          class="mb-6 p-4 bg-blue-50 rounded-lg"
-        >
+        <div v-if="pageSelectionnee.media" class="mb-6 p-4 bg-blue-50 rounded-lg">
           <h3 class="text-sm font-semibold text-blue-900 mb-2">Média actuel</h3>
-          <p class="text-sm text-blue-700">
-            Type : {{ pageSelectionnee.mediaType }}
-          </p>
-          <p class="text-sm text-blue-700 truncate">
-            Nom : {{ pageSelectionnee.mediaName }}
-          </p>
-          <p v-if="pageSelectionnee.mediaSize" class="text-sm text-blue-700">
-            Taille : {{ formatFileSize(pageSelectionnee.mediaSize) }}
-          </p>
+          <p class="text-sm text-blue-700">Type : {{ pageSelectionnee.mediaType }}</p>
+          <p class="text-sm text-blue-700 truncate">Nom : {{ pageSelectionnee.mediaName }}</p>
+          <p v-if="pageSelectionnee.mediaSize" class="text-sm text-blue-700">Taille : {{ formatFileSize(pageSelectionnee.mediaSize) }}</p>
         </div>
 
-        <!-- Durée d'affichage -->
         <div class="mb-6">
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            Durée d'affichage
-          </label>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Durée d'affichage</label>
           <div class="flex items-center space-x-2">
             <span class="text-sm text-gray-600 w-12">Début</span>
-            <input
-              v-model="pageSelectionnee.dureeDebut"
-              type="date"
-              class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <input v-model="pageSelectionnee.dureeDebut" type="date" class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div class="flex items-center space-x-2 mt-2">
             <span class="text-sm text-gray-600 w-12">Fin</span>
-            <input
-              v-model="pageSelectionnee.dureeFin"
-              type="date"
-              class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <input v-model="pageSelectionnee.dureeFin" type="date" class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
         </div>
 
-        <!-- Durée à l'écran -->
         <div class="mb-6">
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            Durée à l'écran (secondes)
-          </label>
-          <input
-            v-model.number="pageSelectionnee.dureeAffichage"
-            type="number"
-            min="1"
-            :disabled="pageSelectionnee.mediaType === 'video'"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-          />
-          <p
-            v-if="pageSelectionnee.mediaType === 'video'"
-            class="text-xs text-gray-500 mt-1"
-          >
-            Les vidéos utilisent leur durée native
-          </p>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Durée à l'écran (secondes)</label>
+          <input v-model.number="pageSelectionnee.dureeAffichage" type="number" min="1" :disabled="pageSelectionnee.mediaType === 'video'" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100" />
+          <p v-if="pageSelectionnee.mediaType === 'video'" class="text-xs text-gray-500 mt-1">Les vidéos utilisent leur durée native</p>
         </div>
 
-        <!-- Type de transition -->
         <div class="mb-6">
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            Transition
-          </label>
-          <select
-            v-model="pageSelectionnee.transition"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
+          <label class="block text-sm font-medium text-gray-700 mb-2">Transition</label>
+          <select v-model="pageSelectionnee.transition" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="none">Aucune</option>
             <option value="fade">Fondu</option>
             <option value="slide-left">Glissement gauche</option>
@@ -600,41 +558,37 @@ const gererUploadFichier = (event) => {
           </select>
         </div>
 
-        <!-- Mode d'affichage -->
         <div class="mb-6">
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            Mode d'affichage
-          </label>
-          <select
-            v-model="pageSelectionnee.modeAffichage"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
+          <label class="block text-sm font-medium text-gray-700 mb-2">Mode d'affichage</label>
+          <select v-model="pageSelectionnee.modeAffichage" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="cover">Couvrir (remplir l'écran)</option>
             <option value="contain">Contenir (afficher tout)</option>
             <option value="stretch">Étirer (déformer si nécessaire)</option>
           </select>
         </div>
 
-        <!-- Répétition (pour les vidéos) -->
         <div v-if="pageSelectionnee.mediaType === 'video'" class="mb-6">
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            Répétition de la vidéo
-          </label>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Répétition de la vidéo</label>
           <div class="flex items-center">
-            <input
-              type="checkbox"
-              v-model="pageSelectionnee.loop"
-              class="mr-2"
-            />
+            <input type="checkbox" v-model="pageSelectionnee.loop" class="mr-2" />
             <span class="text-sm">Lire en boucle</span>
           </div>
         </div>
       </div>
 
-      <!-- Message si aucune page sélectionnée -->
       <div v-else class="text-center text-gray-500">
         <p>Sélectionnez une page pour voir ses propriétés</p>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.drag-handle {
+  cursor: move;
+  cursor: grab;
+}
+.drag-handle:active {
+  cursor: grabbing;
+}
+</style>

@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { motion } from "motion-v";
-import ConsoleLog from "../components/ConsoleLog.vue";
+import Preview from "../components/Preview.vue";
 import playIcon from "../assets/icons/play.svg";
 import stopIcon from "../assets/icons/stop-circle.svg";
 import { useRouter } from "vue-router";
@@ -23,7 +23,7 @@ const router = useRouter();
 function goToExternal() {
   const displayUrl = `${window.location.protocol}//${window.location.host}/display`;
   console.log("Generated URL:", displayUrl);
-  
+
   window.open(displayUrl, "_blank", "noopener");
 }
 async function toggleApp() {
@@ -37,7 +37,6 @@ async function toggleApp() {
   }
   updateStatus();
 }
-
 
 const btnLabel = computed(() => (running.value ? "Arrêter" : "Démarrer"));
 const btnIcon = computed(() => (running.value ? stopIcon : playIcon));
@@ -63,42 +62,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="p-6 flex flex-col h-full">
-    <!-- ─── Header + Buttons ─── -->
-    <div class="flex items-center justify-between mb-4 mt-20">
-      <div class="space-y-2">
-        <h1 class="text-2xl font-bold text-black">
-          Tableau de bord
-        </h1>
-        <span class="text-black font-bold text-xl">État : </span>
-        <span :class="running ? 'text-black text-xl font-bold  bg-[#3EC342] px-4 py-1.5 rounded-lg' : 'text-red-400'">
-          {{ running ? " En cours" : " Arrêté" }}
-        </span>
-      </div>
-      <div class="flex space-x-2">
-        <button
-          v-if="running"
-          @click="goToExternal"
-          class="btn btn-link bg-blue-400 font-black rounded-lg p-2"
-        >
-          Accéder au tableau
-        </button>
-
-        <button
-          @click="toggleApp"
-          :disabled="loading"
-          :class="['px-4 py-2 text-black rounded font-bold', btnClass]"
-        >
-          <img
-            :src="btnIcon"
-            class="inline w-4 h-4.5 mr-1 align-text-bottom"
-            alt=""
-          />
-          {{ running ? "Arrêter" : "Démarrer" }}
-        </button>
-      </div>
-    </div>
-
+  <div class="flex flex-col h-full overflow-hidden relative">
     <!-- ─── Animated Console Section ─── -->
     <motion.div
       :initial="{ opacity: 0, y: 20, filter: 'blur(10px)' }"
@@ -110,8 +74,33 @@ onBeforeUnmount(() => {
       }"
       class="flex-1"
     >
-
+      <Preview />
     </motion.div>
+
+    <!-- ─── Button on top of console-log (bottom right) ─── -->
+    <button
+      @click="goToExternal"
+      class="flex flex-row items-center gap-1.5 px-4 btn btn-link bg-blue-400 font-black rounded-2xl p-2 absolute bottom-12 left-12 z-10 hover:bg-blue-500 transition-colors"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        fill="currentColor"
+        class="bi bi-box-arrow-up-right"
+        viewBox="0 0 16 16"
+      >
+        <path
+          fill-rule="evenodd"
+          d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"
+        />
+        <path
+          fill-rule="evenodd"
+          d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"
+        />
+      </svg>
+      Accéder au tableau
+    </button>
   </div>
 </template>
 
