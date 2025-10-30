@@ -5,17 +5,16 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { useAuthStore } from "./stores/authStore";
 
-// 📄 Import de toutes tes pages/vues
 import Login from "./views/Login.vue";
 import Password from "./views/Password.vue";
 import Console from "./views/Console.vue";
 import Editor from "./views/Editor.vue";
 import Announcement from "./views/Announcement.vue";
 import Settings from "./views/Settings.vue";
-import TitleCard from "./views/TitleCard.vue";
 import ForgotPassword from "./views/ForgotPassword.vue";
 import ResetPassword from "./views/ResetPassword.vue";
-// ... ajoute tes autres imports ici
+import MainDisplay from "./views/MainDisplay.vue";
+
 
 // 🗺️ DÉFINITION DES ROUTES
 const routes = [
@@ -26,19 +25,19 @@ const routes = [
     path: "/login",
     name: "Login",
     component: Login,
-    meta: { requiresAuth: false }, // ❌ Pas besoin d'être connecté
+    meta: { requiresAuth: false }, 
   },
   {
     path: "/password",
     name: "Password",
     component: Password,
-    meta: { requiresAuth: false }, // ❌ Pas besoin d'être connecté
+    meta: { requiresAuth: false }, 
   },
   {
     path: "/display",
     name: "Display",
     component: Announcement,
-    meta: { requiresAuth: false }, // ✅ Connexion requise
+    meta: { requiresAuth: false }, 
   },
   {
     path: "/forgot-password",
@@ -59,25 +58,25 @@ const routes = [
     path: "/",
     name: "Home",
     component: Console, // Ta page d'accueil
-    meta: { requiresAuth: true }, // ✅ Connexion requise
+    meta: { requiresAuth: true }, 
   },
   {
     path: "/editor",
     name: "Editor",
     component: Editor,
-    meta: { requiresAuth: true }, // ✅ Connexion requise
+    meta: { requiresAuth: true }, 
   },
   {
     path: "/settings",
     name: "Settings",
     component: Settings,
-    meta: { requiresAuth: true }, // ✅ Connexion requise
+    meta: { requiresAuth: true }, 
   },
   {
-    path: "/title_card",
-    name: "TitleCard",
-    component: TitleCard,
-    meta: { requiresAuth: true }, // ✅ Connexion requise
+    path: "/stm",
+    name: "STM",
+    component: MainDisplay,
+    meta: {requiresAuth : true},
   },
 
   // ==========================================

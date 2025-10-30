@@ -41,7 +41,8 @@ watch(() => authStore.user, (newUser) => {
 <template>
   <div id="app" class="flex min-h-screen bg-[#F0F0F0]">
     <Sidebar 
-      v-if="$route.path !== '/display' && 
+      v-if="$route.path !== '/display' &&
+            $route.path !== '/stm' && 
             $route.path !== '/Editor' && 
             $route.path !== '/login' && 
             $route.path !== '/password'&& 

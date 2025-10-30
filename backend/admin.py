@@ -27,15 +27,7 @@ from flask import (
 )
 from werkzeug.utils import secure_filename
 from flask_cors import CORS
-try:
-    from .managers.background_manager import get_slots, set_slots, list_images
-except ImportError:
-    import sys
-    from pathlib import Path
-    backend_dir = Path(__file__).parent
-    if str(backend_dir) not in sys.path:
-        sys.path.insert(0, str(backend_dir))
-    from managers.background_manager import get_slots, set_slots, list_images
+
 
 
 print(f"[DEBUG] Running admin.py from {Path(__file__).resolve()}")
@@ -725,10 +717,6 @@ def admin_update_gtfs():
     transport = request.form.get("transport", "").lower()
     z = request.files.get("gtfs_zip")
 
-    if transport not in ("stm", "exo"):
-        flash("Transport invalide.", "danger")
-        return redirect(url_for("serve_spa", path=""))
-
     if not z or z.filename == "":
         flash("Aucun fichier sélectionné.", "danger")
         return redirect(url_for("serve_spa", path=""))
@@ -739,12 +727,9 @@ def admin_update_gtfs():
 
     GTFS_ROOT = PROJECT_ROOT / "backend" / "GTFS"
     stm_dir = GTFS_ROOT / "stm"
-    exo_dir = GTFS_ROOT / "exo"
 
     if transport == "stm":
         target = stm_dir
-    else:
-        target = exo_dir 
 
     timestamp = int(time.time())
     tmp_zip = GTFS_ROOT / f"{transport}_uploaded_{timestamp}.zip"

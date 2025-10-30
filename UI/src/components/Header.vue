@@ -1,6 +1,5 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from "vue";
-import Bdeblogo from '../assets/icons/bdeb.svg'
 
 const currentTime = ref('');
 const weather = ref({

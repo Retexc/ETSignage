@@ -72,6 +72,23 @@
             </div>
           </transition>
 
+          <!-- 🆕 Affichage pour URL WEB (quand il n'y a pas de média) -->
+          <transition :name="currentAnnonce.transition" mode="out-in">
+            <div 
+              v-if="!currentAnnonce.mediaType && currentAnnonce.linkURL" 
+              :key="'url-' + currentAnnonce.id + '-' + currentPage"
+              class="w-full h-full flex items-center justify-center overflow-hidden bg-white"
+            >
+              <iframe 
+                :src="currentAnnonce.linkURL"
+                class="w-full h-full border-0"
+                @load="onMediaLoaded"
+                @error="onMediaError"
+                sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads"
+              ></iframe>
+            </div>
+          </transition>
+
           <!-- Indicateur de page -->
           <div class="absolute bottom-4 right-4 bg-black/70 backdrop-blur-lg px-4 py-2 rounded-full z-50">
             <div class="text-white text-sm font-medium">
@@ -80,7 +97,7 @@
           </div>
 
           <!-- Badge "PREVIEW" -->
-          <div class="absolute top-4 left-4 bg-blue-500 backdrop-blur-lg px-4 py-2 rounded-full z-50 flex items-center gap-2">
+          <div class="absolute top-4 left-4 bg-red-500 backdrop-blur-lg px-4 py-2 rounded-full z-50 flex items-center gap-2">
             <div class="w-2 h-2 bg-white rounded-full animate-pulse"></div>
             <span class="text-white text-xs font-bold uppercase">Aperçu</span>
           </div>
@@ -205,8 +222,12 @@ const loadAnnonces = async () => {
       // 🆕 Charger les médias depuis IndexedDB
       const annoncesWithMedia = await loadMediaFromIndexedDB(annonces);
       
-      // Filtrer seulement les annonces avec média
-      const validAnnonces = annoncesWithMedia.filter(a => a.media !== null)
+      // 🆕 MODIFICATION: Filtrer les annonces avec média OU avec linkURL
+      const validAnnonces = annoncesWithMedia.filter(a => 
+        a.media !== null || (a.linkURL && a.linkURL.trim() !== '')
+      )
+      
+      console.log('📊 [PREVIEW] Annonces valides trouvées:', validAnnonces.length)
       
       // Si la liste a changé, réinitialiser
       if (JSON.stringify(validAnnonces.map(a => a.id)) !== JSON.stringify(allAnnonces.value.map(a => a.id))) {
@@ -223,6 +244,10 @@ const loadAnnonces = async () => {
         if (validAnnonces.length > 0) {
           currentAnnonce.value = validAnnonces[currentPage.value]
           console.log('✅ [PREVIEW] Annonce actuelle:', currentAnnonce.value.nom)
+          console.log('📄 [PREVIEW] Type:', currentAnnonce.value.mediaType || 'URL Web')
+          if (currentAnnonce.value.linkURL) {
+            console.log('🔗 [PREVIEW] URL:', currentAnnonce.value.linkURL)
+          }
         } else {
           currentAnnonce.value = null
         }
@@ -256,6 +281,7 @@ const startTimer = () => {
     clearTimeout(currentTimer.value)
   }
   
+  // Démarrer le timer pour tout sauf les vidéos
   if (currentAnnonce.value && currentAnnonce.value.mediaType !== 'video') {
     const duration = (currentAnnonce.value.dureeAffichage || 5) * 1000
     console.log(`⏱️ [PREVIEW] Timer démarré: ${duration}ms`)
@@ -267,7 +293,7 @@ const startTimer = () => {
 
 // Événements média
 const onMediaLoaded = () => {
-  console.log('✅ [PREVIEW] Média chargé:', currentAnnonce.value?.nom)
+  console.log('✅ [PREVIEW] Contenu chargé:', currentAnnonce.value?.nom)
   startTimer()
 }
 
@@ -288,6 +314,14 @@ const onVideoEnd = () => {
   }
 }
 
+const onMediaError = (error) => {
+  console.error('❌ [PREVIEW] Erreur de chargement:', error)
+  console.log('⚠️ [PREVIEW] Le contenu ne peut pas être chargé - passage au suivant...')
+  setTimeout(() => {
+    nextPage()
+  }, 2000)
+}
+
 // Lifecycle
 onMounted(async () => {
   console.log('🚀 [PREVIEW] Démarrage du preview...')
@@ -300,7 +334,9 @@ onMounted(async () => {
   
   // Démarrer le timer si on a du contenu
   if (currentAnnonce.value) {
-    if (currentAnnonce.value.mediaType === 'image' || currentAnnonce.value.mediaType === 'pdf') {
+    if (currentAnnonce.value.mediaType === 'image' || 
+        currentAnnonce.value.mediaType === 'pdf' ||
+        (!currentAnnonce.value.mediaType && currentAnnonce.value.linkURL)) {
       startTimer()
     }
   }

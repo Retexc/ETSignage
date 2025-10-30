@@ -159,6 +159,7 @@ export default {
         mediaType: null,
         mediaName: null,
         mediaSize: null,
+        linkURL: "",
         dureeDebut: "",
         dureeFin: "",
         dureeAffichage: 5,
@@ -206,6 +207,7 @@ export default {
         mediaType: null,
         mediaName: null,
         mediaSize: null,
+        linkURL: "",
         dureeDebut: "",
         dureeFin: "",
         dureeAffichage: 5,
@@ -527,6 +529,17 @@ export default {
           <p v-if="pageSelectionnee.mediaSize" class="text-sm text-blue-700">Taille : {{ formatFileSize(pageSelectionnee.mediaSize) }}</p>
         </div>
 
+
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Lien URL</label>
+          <input 
+            v-model="pageSelectionnee.linkURL" 
+            type="url" 
+            placeholder="https://example.com" 
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" 
+          />
+          <p class="text-xs text-gray-500 mt-1">Optionnel : Ajouter un lien qui s'affichera avec l'annonce</p>
+        </div>
         <div class="mb-6">
           <label class="block text-sm font-medium text-gray-700 mb-2">Durée d'affichage</label>
           <div class="flex items-center space-x-2">

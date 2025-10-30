@@ -197,7 +197,7 @@ function getCurrentUpdateState() {
                 :class="[
                   'inline-block p-4 border-b-2 rounded-t-lg',
                   active === tab.id
-                    ? 'text-blue-400 border-blue-400'
+                    ? 'text-black font-bold border-red-500'
                     : 'border-transparent hover:text-gray-600 hover:border-gray-300',
                 ]"
               >
@@ -209,8 +209,23 @@ function getCurrentUpdateState() {
       </div>
 
       <!-- ──────── Tab Panels ──────── -->
-      <div class="mt-4">
-        <div v-if="active === 'gtfs'">
+        <motion.div
+          class="mt-4"
+          :key="'tab_panel'"
+          :initial="{ opacity: 0, y: 20, filter: 'blur(10px)' }"
+          :animate="{
+            opacity: 1,
+            y: 0,
+            filter: 'blur(0px)',
+            transition: { duration: 0.5 },
+          }"
+        >
+        <motion.div 
+        v-if="active === 'gtfs'"
+        :key="'gtfs_tab'"
+        :initial="{ opacity: 0, y: 20 }"
+        :animate="{ opacity: 1, y: 0, transition: { duration: 0.3 } }"        
+        >
           <div class="bg-gray-300 rounded-lg p-6 mb-6 text-black space-y-4">
             <h3 class="text-xl font-semibold">
               Les fichiers GTFS contiennent les horaires et les informations des
@@ -256,10 +271,14 @@ function getCurrentUpdateState() {
                 Dernière mise à jour : {{ stmLastUpdate }}
               </p>
             </div>
-
           </div>
-        </div>
-        <div v-else-if="active === 'update'">
+        </motion.div>
+        <motion.div
+        v-else-if="active === 'update'"
+        :key="'update_tab'"
+        :initial="{ opacity: 0, y: 20 }"
+        :animate="{ opacity: 1, y: 0, transition: { duration: 0.3 } }"  
+        >
           <div
             class="bg-gray-300 rounded-lg p-6 mb-6 text-black space-y-4 flex flex-row items-center justify-between"
           >
@@ -344,8 +363,13 @@ function getCurrentUpdateState() {
               class="h-10 w-1/10 rounded border-gray-300 text-black font-bold focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 bg-gray-300 px-5"
             />
           </div>
-        </div>
-        <div v-else-if="active === 'about'">
+        </motion.div>
+        <motion.div
+        v-else-if="active === 'about'"
+        :key="'about_tab'"
+        :initial="{ opacity: 0, y: 20 }"
+        :animate="{ opacity: 1, y: 0, transition: { duration: 0.3 } }"          
+        >
           <div
             class="bg-gray-300 rounded-2xl p-10 flex flex-row items-center justify-between space-x-8"
           >
@@ -393,10 +417,10 @@ function getCurrentUpdateState() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        </motion.div>
+        </motion.div>
     </div>
-  </motion.div>
+</motion.div>
 </template>
 
 <style scoped>

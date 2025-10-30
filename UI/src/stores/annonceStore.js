@@ -9,9 +9,11 @@ export const useAnnonceStore = defineStore('annonce', {
         id: 1,
         nom: "Page 1",
         media: null,
+        mediaURL: null,
         mediaType: null,
         mediaName: null,
         mediaSize: null,
+        linkURL: "",
         dureeDebut: "",
         dureeFin: "",
         dureeAffichage: 5,
@@ -24,45 +26,39 @@ export const useAnnonceStore = defineStore('annonce', {
     pageActuelle: 0,
     // État de lecture
     isPlaying: false,
-    isPaused: false,
-    // 🆕 NOUVEAU : Version pour forcer le rechargement des composants
-    version: 0
+    isPaused: false
   }),
 
   getters: {
-
-    annoncesAvecMedia: (state) => {
-      return state.annonces.filter(a => a.media !== null)
+    // 🆕 MODIFICATION: Inclure les annonces avec média OU avec linkURL
+    annoncesValides: (state) => {
+      return state.annonces.filter(a => a.media !== null || (a.linkURL && a.linkURL.trim() !== ''))
     },
     
-
+    // 🆕 MODIFICATION: Retourner l'annonce actuelle parmi les annonces valides
     annonceActuelle: (state) => {
-      const annoncesValides = state.annonces.filter(a => a.media !== null)
+      const annoncesValides = state.annonces.filter(a => a.media !== null || (a.linkURL && a.linkURL.trim() !== ''))
       if (annoncesValides.length === 0) return null
       return annoncesValides[state.pageActuelle % annoncesValides.length]
     },
     
-    // Nombre total d'annonces avec média
+    // 🆕 MODIFICATION: Compter les annonces avec média OU avec linkURL
     totalAnnonces: (state) => {
-      return state.annonces.filter(a => a.media !== null).length
+      return state.annonces.filter(a => a.media !== null || (a.linkURL && a.linkURL.trim() !== '')).length
     }
   },
 
   actions: {
-
+    // Ajouter une nouvelle annonce
     ajouterAnnonce(annonce) {
       this.annonces.push(annonce)
-      // 🆕 Notifier le changement
-      this.notifierChangement()
     },
     
-  
+    // Mettre à jour une annonce existante
     mettreAJourAnnonce(id, data) {
       const index = this.annonces.findIndex(a => a.id === id)
       if (index !== -1) {
         this.annonces[index] = { ...this.annonces[index], ...data }
-        // 🆕 Notifier le changement
-        this.notifierChangement()
       }
     },
     
@@ -71,138 +67,70 @@ export const useAnnonceStore = defineStore('annonce', {
       const index = this.annonces.findIndex(a => a.id === id)
       if (index !== -1) {
         this.annonces.splice(index, 1)
-        // 🆕 Notifier le changement
-        this.notifierChangement()
       }
     },
     
-   
+    // Remplacer toute la liste des annonces
     setAnnonces(annonces) {
       this.annonces = annonces
-      // 🆕 Notifier le changement
-      this.notifierChangement()
     },
     
-
+    // 🆕 MODIFICATION: Navigation avec les annonces valides
     pageSuivante() {
-      const annoncesValides = this.annonces.filter(a => a.media !== null)
+      const annoncesValides = this.annonces.filter(a => a.media !== null || (a.linkURL && a.linkURL.trim() !== ''))
       if (annoncesValides.length > 0) {
         this.pageActuelle = (this.pageActuelle + 1) % annoncesValides.length
-        // 🆕 Sauvegarder et notifier
-        this.sauvegarderEtat()
-        this.notifierChangement()
       }
     },
     
-
+    // Aller à une page spécifique
     allerALaPage(index) {
-      const annoncesValides = this.annonces.filter(a => a.media !== null)
+      const annoncesValides = this.annonces.filter(a => a.media !== null || (a.linkURL && a.linkURL.trim() !== ''))
       if (index >= 0 && index < annoncesValides.length) {
         this.pageActuelle = index
-        // 🆕 Sauvegarder et notifier
-        this.sauvegarderEtat()
-        this.notifierChangement()
       }
     },
     
-
+    // Démarrer la lecture automatique
     demarrerLecture() {
       this.isPlaying = true
       this.isPaused = false
-      this.sauvegarderEtat()
-      this.notifierChangement()
     },
     
-
+    // Mettre en pause
     pauseLecture() {
       this.isPaused = true
-      this.sauvegarderEtat()
-      this.notifierChangement()
     },
     
-
+    // Reprendre la lecture
     reprendreLecture() {
       this.isPaused = false
-      this.sauvegarderEtat()
-      this.notifierChangement()
     },
     
-
+    // Arrêter la lecture
     arreterLecture() {
       this.isPlaying = false
       this.isPaused = false
       this.pageActuelle = 0
-      this.sauvegarderEtat()
-      this.notifierChangement()
     },
     
-
+    // Sauvegarder dans localStorage
     sauvegarderLocal() {
       localStorage.setItem('annonces', JSON.stringify(this.annonces))
-      // 🆕 Notifier le changement
-      this.notifierChangement()
+      console.log('💾 Annonces sauvegardées:', this.annonces.length)
     },
     
-    // 🆕 NOUVELLE FONCTION : Sauvegarder l'état de la lecture
-    sauvegarderEtat() {
-      const etat = {
-        pageActuelle: this.pageActuelle,
-        isPlaying: this.isPlaying,
-        isPaused: this.isPaused,
-        version: this.version,
-        timestamp: Date.now()
-      }
-      localStorage.setItem('annonceState', JSON.stringify(etat))
-      console.log('💾 État sauvegardé:', etat)
-    },
-
-    // 🆕 NOUVELLE FONCTION : Charger l'état de la lecture
-    chargerEtat() {
-      const saved = localStorage.getItem('annonceState')
-      if (saved) {
-        try {
-          const etat = JSON.parse(saved)
-          this.pageActuelle = etat.pageActuelle || 0
-          this.isPlaying = etat.isPlaying || false
-          this.isPaused = etat.isPaused || false
-          this.version = etat.version || 0
-          console.log('📂 État chargé:', etat)
-        } catch (e) {
-          console.error('Erreur lors du chargement de l\'état:', e)
-        }
-      }
-    },
- 
+    // Charger depuis localStorage
     chargerLocal() {
       const saved = localStorage.getItem('annonces')
       if (saved) {
         try {
           this.annonces = JSON.parse(saved)
+          console.log('📥 Annonces chargées:', this.annonces.length)
         } catch (e) {
-          console.error('Erreur lors du chargement des annonces:', e)
+          console.error('❌ Erreur lors du chargement des annonces:', e)
         }
       }
-      this.chargerEtat()
-    },
-
-    // 🆕 NOUVELLE FONCTION : Notifier tous les composants d'un changement
-    notifierChangement() {
-      // Incrémenter la version
-      this.version++
-      
-      // Sauvegarder l'état avec la nouvelle version
-      this.sauvegarderEtat()
-      
-      // Émettre un événement personnalisé pour notifier tous les composants
-      window.dispatchEvent(new CustomEvent('annonce-changed', { 
-        detail: { 
-          version: this.version,
-          pageActuelle: this.pageActuelle,
-          timestamp: Date.now()
-        } 
-      }))
-      
-      console.log('📢 Changement notifié - Version:', this.version)
     }
   }
 })

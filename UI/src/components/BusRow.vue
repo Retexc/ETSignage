@@ -97,7 +97,7 @@ const trainIcon = new URL("../assets/icons/train.svg", import.meta.url).href;
 
 <template>
   <div
-    class="flex flex-row justify-between items-center ml-8 mr-8 py-6 border-b border-gray-300"
+    class="flex flex-row justify-between items-center ml-8 mr-8 py-3 border-b border-gray-300"
     :class="cancelled ? 'opacity-75' : ''"
   >
     <div class="flex flex-row items-center gap-8">
@@ -114,7 +114,7 @@ const trainIcon = new URL("../assets/icons/train.svg", import.meta.url).href;
       </span>
 
       <div
-        class="flex flex-col text-black font-bold bg-[#F8F8F8] opacity-90 rounded-xl w-100 px-4 py-1"
+        class="flex flex-col text-black font-bold bg-[#F8F8F8] opacity-90 rounded-xl w-150 px-4 py-1"
         :class="cancelled ? 'opacity-60' : ''"
       >
         <div class="flex flex-row items-center gap-2">

@@ -3,7 +3,7 @@
   
   <div class="fixed inset-0 w-screen h-screen bg-black flex items-center justify-center overflow-hidden pt-16">
     
-    <!-- aucune annonce avec média -->
+    <!-- aucune annonce -->
     <div v-if="!annonceActuelle" class="flex items-center justify-center w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600">
       <div class="text-center">
         <svg class="w-32 h-32 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -17,7 +17,7 @@
       </div>
     </div>
 
-    <!-- Affichage du média actuel -->
+    <!-- Affichage du contenu actuel -->
     <div v-else class="w-full h-full relative overflow-hidden">
       
       <!-- Affichage pour IMAGE -->
@@ -71,6 +71,23 @@
             :src="annonceActuelle.mediaURL"
             class="w-full h-full"
             @load="onMediaLoaded"
+          ></iframe>
+        </div>
+      </transition>
+
+      <!-- 🆕 Affichage pour URL WEB (quand il n'y a pas de média) -->
+      <transition :name="annonceActuelle.transition" mode="out-in">
+        <div 
+          v-if="!annonceActuelle.mediaType && annonceActuelle.linkURL" 
+          :key="'url-' + annonceActuelle.id"
+          class="w-full h-full flex items-center justify-center overflow-hidden bg-white"
+        >
+          <iframe 
+            :src="annonceActuelle.linkURL"
+            class="w-full h-full border-0"
+            @load="onMediaLoaded"
+            @error="onMediaError"
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads"
           ></iframe>
         </div>
       </transition>
@@ -241,8 +258,10 @@ const startTimer = () => {
     clearTimeout(currentTimer.value)
   }
   
+  // Démarrer le timer seulement si ce n'est pas une vidéo
   if (!isPaused.value && annonceActuelle.value && annonceActuelle.value.mediaType !== 'video') {
     const duration = annonceActuelle.value.dureeAffichage * 1000 || 5000
+    console.log(`⏱️ Timer démarré pour ${duration}ms`)
     currentTimer.value = setTimeout(() => {
       nextPage()
     }, duration)
@@ -286,8 +305,14 @@ const togglePause = () => {
 
 // Événements média
 const onMediaLoaded = () => {
-  console.log('✅ Média chargé:', annonceActuelle.value?.nom)
-  if (annonceActuelle.value?.mediaType === 'image' || annonceActuelle.value?.mediaType === 'pdf') {
+  console.log('✅ Contenu chargé:', annonceActuelle.value?.nom)
+  console.log('📄 Type:', annonceActuelle.value?.mediaType || 'URL Web')
+  console.log('🔗 URL:', annonceActuelle.value?.linkURL)
+  
+  // Démarrer le timer pour les images, PDFs et URLs web
+  if (annonceActuelle.value?.mediaType === 'image' || 
+      annonceActuelle.value?.mediaType === 'pdf' ||
+      (!annonceActuelle.value?.mediaType && annonceActuelle.value?.linkURL)) {
     startTimer()
   }
 }
@@ -310,8 +335,8 @@ const onVideoEnd = () => {
 }
 
 const onMediaError = (error) => {
-  console.error('❌ Erreur média:', error)
-  console.log('⚠️ Le média ne peut pas être chargé - passage au suivant...')
+  console.error('❌ Erreur de chargement:', error)
+  console.log('⚠️ Le contenu ne peut pas être chargé - passage au suivant...')
   setTimeout(() => {
     nextPage()
   }, 2000)
@@ -338,6 +363,7 @@ const handleVisibilityChange = async () => {
 // Watchers
 watch(annonceActuelle, (newVal) => {
   if (newVal) {
+    console.log('📢 Annonce changée:', newVal.nom)
     startTimer()
   }
 })
@@ -367,11 +393,15 @@ onMounted(async () => {
   // 🆕 Charger les médias depuis IndexedDB
   await loadMediaFromIndexedDB()
   
+  console.log('📊 Annonces chargées:', annonceStore.annonces.length)
+  console.log('📊 Annonces valides:', totalAnnonces.value)
+  
   // Démarrer la lecture
   annonceStore.demarrerLecture()
   
   // Démarrer le timer si nécessaire
   if (annonceActuelle.value) {
+    console.log('🚀 Démarrage avec:', annonceActuelle.value.nom)
     startTimer()
   }
 
