@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, watch } from 'vue';
+import { onMounted, watch, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from './stores/authStore';
 import Sidebar from "./components/SideBar.vue";
@@ -9,6 +9,11 @@ import './style.css';
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+
+// Computed pour savoir si on est sur une page "display"
+const isDisplayPage = computed(() => {
+  return route.path === '/display' || route.path === '/stm';
+});
 
 // Vérifier si l'utilisateur est connecté au démarrage de l'app
 onMounted(async () => {
@@ -39,17 +44,20 @@ watch(() => authStore.user, (newUser) => {
 </script>
 
 <template>
-  <div id="app" class="flex min-h-screen bg-[#F0F0F0]">
+  <!-- Pour les pages display/stm: affichage en plein écran sans le layout du dashboard -->
+  <div v-if="isDisplayPage" class="fixed inset-0 w-screen h-screen bg-black">
+    <router-view />
+  </div>
+
+  <!-- Pour toutes les autres pages: layout normal avec sidebar -->
+  <div v-else id="app" class="flex min-h-screen bg-[#F0F0F0]">
     <Sidebar 
-      v-if="$route.path !== '/display' &&
-            $route.path !== '/stm' && 
-            $route.path !== '/Editor' && 
+      v-if="$route.path !== '/Editor' && 
             $route.path !== '/login' && 
             $route.path !== '/password'&& 
             $route.path !== '/forgot-password'&& 
             $route.path !== '/reset-password'"
     />
-
 
     <div class="flex-1 overflow-auto bg-[#F0F0F0]">
       <router-view />

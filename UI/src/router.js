@@ -1,25 +1,21 @@
-// src/router.js
-// Ce fichier gère toutes les routes (URLs) de ton application
-// et protège les pages qui nécessitent une connexion
-
 import { createRouter, createWebHistory } from "vue-router";
 import { useAuthStore } from "./stores/authStore";
 
 import Login from "./views/Login.vue";
 import Password from "./views/Password.vue";
-import Console from "./views/Console.vue";
+import Console from "./views/HomePreview.vue";
 import Editor from "./views/Editor.vue";
-import Announcement from "./views/Announcement.vue";
+import Announcement from "./views/AnnouncementDisplay.vue";
 import Settings from "./views/Settings.vue";
 import ForgotPassword from "./views/ForgotPassword.vue";
 import ResetPassword from "./views/ResetPassword.vue";
-import MainDisplay from "./views/MainDisplay.vue";
+import MainDisplay from "./views/STMDisplay.vue";
 
 
 // 🗺️ DÉFINITION DES ROUTES
 const routes = [
   // ==========================================
-  // ROUTES PUBLIQUES (pas besoin de connexion)
+  // ROUTES PUBLIQUES
   // ==========================================
   {
     path: "/login",
@@ -57,7 +53,7 @@ const routes = [
   {
     path: "/",
     name: "Home",
-    component: Console, // Ta page d'accueil
+    component: Console, 
     meta: { requiresAuth: true }, 
   },
   {
@@ -84,7 +80,7 @@ const routes = [
   // ==========================================
   {
     path: "/:pathMatch(.*)*",
-    redirect: "/login", // Si la page n'existe pas, rediriger vers login
+    redirect: "/login", 
   },
 ];
 
@@ -95,7 +91,6 @@ const router = createRouter({
 });
 
 // PROTECTION DES ROUTES
-// Ce code s'exécute AVANT chaque changement de page
 router.beforeEach(async (to, from, next) => {
   console.log("🔄 Navigation vers:", to.path);
 
@@ -105,7 +100,6 @@ router.beforeEach(async (to, from, next) => {
   // Vérifier si l'utilisateur est connecté
   const user = await authStore.checkUser();
 
-  // Est-ce que cette route nécessite une connexion ?
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
 
   if (requiresAuth && !user) {

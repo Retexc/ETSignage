@@ -94,7 +94,7 @@ python -m backend.admin # Admin app
 
 **Main views:**
 - `Display.vue` - Public-facing transit display screen
-- `Console.vue` - Admin control panel
+- `HomePreview.vue` - Admin control panel
 - `Board.vue` - Transit schedule board view
 - `Background.vue` - Background image scheduler management
 - `Announcement.vue` - Custom alert message management

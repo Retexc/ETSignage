@@ -874,7 +874,7 @@ def auto_start_main_app():
     if os.environ.get('WERKZEUG_RUN_MAIN') != 'true' and os.getenv("FLASK_ENV") == "development":
         return
     def delayed_start():
-        time.sleep(5)
+        time.sleep(10)
         
         if app.config["APP_RUNNING"]:
             logger.info("Main application is already running, skipping auto-start")

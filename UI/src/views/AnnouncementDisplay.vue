@@ -345,7 +345,7 @@ const onMediaError = (error) => {
 // Gestion de la sortie de veille
 const handleVisibilityChange = async () => {
   if (document.visibilityState === 'visible') {
-    console.log('👀 Page visible - Vérification des médias...')
+    console.log('Page visible - Vérification des médias...')
     
     await rechargerAnnonces()
     
@@ -380,17 +380,16 @@ watch(isPaused, (newVal) => {
 
 // Lifecycle
 onMounted(async () => {
-  // Désactiver le scroll sur le body
   document.body.classList.add('overflow-hidden')
   document.documentElement.classList.add('overflow-hidden')
   
-  // 🆕 Initialiser IndexedDB
+  // Initialiser IndexedDB
   await initDB()
   
   // Charger les annonces depuis le localStorage
   annonceStore.chargerLocal()
   
-  // 🆕 Charger les médias depuis IndexedDB
+  // Charger les médias depuis IndexedDB
   await loadMediaFromIndexedDB()
   
   console.log('📊 Annonces chargées:', annonceStore.annonces.length)
@@ -401,19 +400,17 @@ onMounted(async () => {
   
   // Démarrer le timer si nécessaire
   if (annonceActuelle.value) {
-    console.log('🚀 Démarrage avec:', annonceActuelle.value.nom)
+    console.log('Démarrage avec:', annonceActuelle.value.nom)
     startTimer()
   }
 
-  // Écouter les changements de visibilité (sortie de veille)
+  // Écouter les changements de visibilité 
   document.addEventListener('visibilitychange', handleVisibilityChange)
   
-  // Gestion des raccourcis clavier (optionnel)
   window.addEventListener('keydown', handleKeyPress)
 })
 
 onUnmounted(() => {
-  // Réactiver le scroll quand on quitte la page
   document.body.classList.remove('overflow-hidden')
   document.documentElement.classList.remove('overflow-hidden')
   
@@ -425,7 +422,6 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyPress)
 })
 
-// Gestion des touches clavier (optionnel)
 const handleKeyPress = (e) => {
   if (!showControls.value) return
   
@@ -450,6 +446,28 @@ const handleKeyPress = (e) => {
 </script>
 
 <style scoped>
+:deep(body), 
+:deep(html) {
+  overflow: hidden !important;
+  scrollbar-width: none; 
+  -ms-overflow-style: none; 
+}
+
+:deep(body)::-webkit-scrollbar,
+:deep(html)::-webkit-scrollbar {
+  display: none; 
+}
+
+iframe {
+  overflow: hidden !important;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+iframe::-webkit-scrollbar {
+  display: none;
+}
+
 /* Transitions */
 .fade-enter-active, .fade-leave-active {
   transition: opacity 0.5s;
