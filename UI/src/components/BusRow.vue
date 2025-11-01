@@ -263,8 +263,8 @@ const trainIcon = new URL("../assets/icons/train.svg", import.meta.url).href;
         class="w-8 h-8"
         :class="[
           props.bus.at_stop && !cancelled
-            ? 'opacity-100 filter-none animate-pulse [animation-duration: 1s]'
-            : 'opacity-0',
+            ? 'opacity-100 filter-none animate-pulse [animation-duration:1s]'
+            : 'opacity-30 filter grayscale'
         ]"
       />
     </div>

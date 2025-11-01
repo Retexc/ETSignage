@@ -102,58 +102,9 @@ def process_stm_alerts(stm_alerts_data, weather_api_key):
                 'description': "Retards possibles en raison des conditions météo. Vérifiez l’horaire avant de partir.",
                 'severity': "weather_alert",
                 'routes': "Tous",
-                'stop': "STM et Exo"
+                'stop': "STM"
             })
 
     return filtered_alerts
 
-
-
-
-
-def process_exo_alerts(exo_alert_entities):
-    """
-    Filter EXO alerts for certain stop_ids/routes, returning structured data.
-    This function remains unchanged.
-    """
-    filtered_alerts = []
-
-    if not exo_alert_entities:
-        return filtered_alerts
-
-    stop_id_to_route = {
-        "MTL7D": "Dir Lucien l'Allier",
-        "MTL7B": "Saint-Jérôme",
-        "MTL59A": "Mascouche",
-        "MTL59C": "Ahuntsic"
-    }
-    valid_stop_ids = set(stop_id_to_route.keys())
-
-    for entity in exo_alert_entities:
-        if entity.HasField('alert'):
-            alert = entity.alert
-
-            for informed_entity in alert.informed_entity:
-                if informed_entity.HasField('stop_id'):
-                    stop_id = informed_entity.stop_id
-                    if stop_id in valid_stop_ids:
-                        train_route = stop_id_to_route[stop_id]
-
-                        fr_description = ""
-                        for translation in alert.description_text.translation:
-                            if translation.language == 'fr':
-                                fr_description = translation.text
-                                break
-                        if not fr_description:
-                            fr_description = "Description non disponible en français"
-
-                        filtered_alerts.append({
-                            'header': "🚨🚊 Info Train",
-                            'description': fr_description,
-                            'severity': alert.effect,
-                            'stop_id': stop_id,
-                            'train_route': train_route,
-                        })
-
-    return filtered_alerts
 
