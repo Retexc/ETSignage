@@ -25,8 +25,7 @@ from .loaders.stm       import (
     validate_trip,
 )
 
-
-from .alerts            import process_stm_alerts, process_exo_alerts
+from .alerts import process_stm_alerts
 
 # ────────────────────────────────────────────────────────────────
 
@@ -46,16 +45,8 @@ CORS(app)
 PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 GTFS_BASE = os.path.join(PACKAGE_DIR, "GTFS")  # points to backend/GTFS
 STM_DIR = os.path.join(GTFS_BASE, "stm")
-EXO_TRAIN_DIR = os.path.join(GTFS_BASE, "exo")
 
-os.makedirs(STM_DIR,       exist_ok=True)
-os.makedirs(EXO_TRAIN_DIR, exist_ok=True)
-
-_chrono_cache = {
-    "timestamp": 0,
-    "data": None
-}
-CHRONO_CACHE_TTL = 60
+os.makedirs(STM_DIR, exist_ok=True)
 
 # ─── check for required GTFS files ────────────────────────────
 required_stm = ["routes.txt", "trips.txt", "stop_times.txt"]
@@ -81,7 +72,7 @@ stm_trips_fp       = os.path.join(STM_DIR,       "trips.txt")
 stm_stop_times_fp  = os.path.join(STM_DIR,       "stop_times.txt")
 
 routes_map      = load_stm_routes(stm_routes_fp)
-stm_trips       = load_stm_gtfs_trips(stm_trips_fp,      routes_map)
+stm_trips       = load_stm_gtfs_trips(stm_trips_fp, routes_map)
 stm_stop_times  = load_stm_stop_times(stm_stop_times_fp)
 
 def get_weather():
@@ -119,7 +110,10 @@ def process_metro_alerts():
     Returns a list of metro lines with simplified status display.
     """
     try:
-        # Initialize metro status dictionary
+        # Fetch all STM alerts
+        alerts_data = fetch_stm_alerts()
+        
+        # Default status for all lines
         metro_status = {
             "1": {
                 "name": "Ligne 1",
@@ -159,44 +153,28 @@ def process_metro_alerts():
             }
         }
         
-        # Fetch alerts from STM API
-        alerts_response = fetch_stm_alerts()
-        
-        if alerts_response and isinstance(alerts_response, list):
-            for alert in alerts_response:
+        # Process alerts to check for metro disruptions
+        if alerts_data:
+            for alert in alerts_data:
                 try:
-                    informed_entities = alert.get("informed_entity", [])
+                    informed_entities = alert.get("informed_entities", [])
                     
                     for entity in informed_entities:
-                        if not isinstance(entity, dict):
-                            continue
-                            
-                        route_short_name = entity.get("route_short_name")
+                        # Check if this is a metro alert
+                        route_id = entity.get("route_id", "")
                         
-                        # Only process metro lines (1, 2, 4, 5)
-                        if route_short_name in metro_status:
-                            header_text = alert.get("header_text", {})
-                            description_text = alert.get("description_text", {})
-                            
+                        # Metro routes in STM are typically "1", "2", "4", "5"
+                        if route_id in metro_status:
+                            # Get French header text
+                            header_texts = alert.get("header_texts", [])
                             header = ""
-                            description = ""
+                            for ht in header_texts:
+                                if ht.get("language") == "fr":
+                                    header = ht.get("text", "")
+                                    break
                             
-                            if isinstance(header_text, dict):
-                                translations = header_text.get("translation", [])
-                                if translations and len(translations) > 0:
-                                    header = translations[0].get("text", "")
-                            elif isinstance(header_text, str):
-                                header = header_text
-                            
-                            if isinstance(description_text, dict):
-                                translations = description_text.get("translation", [])
-                                if translations and len(translations) > 0:
-                                    description = translations[0].get("text", "")
-                            elif isinstance(description_text, str):
-                                description = description_text
-                            
-                            # Update status based on alert
                             if header:
+                                route_short_name = route_id
                                 metro_status[route_short_name]["is_normal"] = False
                                 metro_status[route_short_name]["status"] = "Service perturbé"
                                 metro_status[route_short_name]["alert_description"] = header
@@ -281,41 +259,49 @@ def index():
 
 @app.route('/api/data', methods=['GET'])
 def get_data():
-    # Build response
+    """
+    Main API endpoint that returns all transit data
+    """
     try:
         # Process metro alerts first
         metro_lines = process_metro_alerts()
         
         # ========== STM ALERTS ==========
+        filtered_alerts = []
         try:
             processed_stm = process_stm_alerts()
             logger.debug(f"Processed STM alerts: {processed_stm}")
-            filtered_alerts = []
             
-            # Filter alerts for response
+            # Format alerts for frontend
             for alert in processed_stm:
-                if alert.get("is_network_wide", False):
-                    filtered_alerts.append({
-                        "type": "network",
-                        "header": alert.get("header", "Alert"),
-                        "description": alert.get("description", "")
-                    })
+                alert_obj = {
+                    "header": alert.get("header", "Alerte"),
+                    "description": alert.get("description", ""),
+                    "alert_type": alert.get("alert_type", "info"),
+                    "severity": alert.get("severity", "info")
+                }
+                
+                # Add route information if it exists
+                if alert.get("is_network_wide"):
+                    alert_obj["routes"] = "Réseau STM"
+                    alert_obj["stop"] = "Général"
+                elif alert.get("routes"):
+                    routes_str = ", ".join(alert["routes"])
+                    alert_obj["routes"] = routes_str
+                    alert_obj["stop"] = "Ligne spécifique"
                 else:
-                    routes = alert.get("routes", [])
-                    if "61" in routes or "36" in routes:
-                        filtered_alerts.append({
-                            "type": "route",
-                            "routes": routes,
-                            "header": alert.get("header", "Route Alert"),
-                            "description": alert.get("description", "")
-                        })
+                    alert_obj["routes"] = "N/A"
+                    alert_obj["stop"] = "N/A"
+                
+                filtered_alerts.append(alert_obj)
+                
         except Exception as e:
-            print(f"ERROR processing STM alerts: {e}")
+            logger.error(f"ERROR processing STM alerts: {e}")
             import traceback
             traceback.print_exc()
-            filtered_alerts = []
 
         # ========== STM BUSES WITH OCCUPANCY ==========
+        buses = []
         try:
             # Get the bus routes from config
             from .config import BUS_ROUTES
@@ -354,8 +340,9 @@ def get_data():
 
             buses = merge_alerts_into_buses(buses, processed_stm if 'processed_stm' in locals() else [])
         except Exception as e:
-            print(f"ERROR processing buses: {e}")
-            buses = []
+            logger.error(f"ERROR processing buses: {e}")
+            import traceback
+            traceback.print_exc()
 
         # ========== WEATHER ==========
         weather = get_weather()
@@ -374,6 +361,7 @@ def get_data():
         }
 
         return jsonify(response), 200
+        
     except Exception as e:
         logger.error(f"Error in get_data: {e}")
         import traceback

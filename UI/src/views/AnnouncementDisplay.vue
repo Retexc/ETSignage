@@ -126,12 +126,14 @@
       </div>
     </div>
   </div>
+  <AlertBanner />
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useAnnonceStore } from '../stores/annonceStore.js'
 import Header from "../components/Header.vue"
+import AlertBanner from "../components/AlertBanner.vue"
 
 // Store Pinia
 const annonceStore = useAnnonceStore()

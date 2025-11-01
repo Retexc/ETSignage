@@ -396,13 +396,35 @@ def safe_extract(zipf: zipfile.ZipFile, dest: Path):
 
 def capture_app_logs(process):
     """Continuously read stdout from the main app process."""
-    while True:
-        line = process.stdout.readline()
-        if not line:
-            break
-        main_app_logs.append(line.rstrip())
-    app.config["APP_RUNNING"] = False
-    logger.info("Main app process ended.")
+    logger.info("Starting log capture thread...")
+    try:
+        while True:
+            line = process.stdout.readline()
+            
+            # Check if process has ended
+            if process.poll() is not None:
+                # Process ended, read any remaining output
+                remaining = process.stdout.read()
+                if remaining:
+                    main_app_logs.append(remaining)
+                    logger.error(f"Process ended with remaining output: {remaining}")
+                break
+            
+            # Log the line if we have one
+            if line:
+                main_app_logs.append(line.rstrip())
+                logger.info(f"Main app output: {line.rstrip()}")
+            else:
+                # No line but process still running, just wait a bit
+                time.sleep(0.1)
+                
+    except Exception as e:
+        logger.error(f"Error in capture_app_logs: {e}")
+    finally:
+        app.config["APP_RUNNING"] = False
+        exit_code = process.poll()
+        logger.info(f"Main app process ended with exit code: {exit_code}")
+        main_app_logs.append(f"{datetime.now()} - Process ended with exit code: {exit_code}")
 
 
 def load_auto_update_cfg():
@@ -791,16 +813,15 @@ def admin_start():
     global app_process
     if not app.config["APP_RUNNING"]:
         try:
+            # Use the simple startup script instead
             cmd = [
                 PYTHON_EXEC,
                 "-u",
-                "-m",
-                "waitress",
-                "--threads=8",
-                "--host=127.0.0.1",
-                "--port=5000",
-                "backend.main:app",
+                str(PROJECT_ROOT / "run_main.py"),
             ]
+            
+            logger.info(f"Starting main app with command: {' '.join(cmd)}")
+            
             app_process = subprocess.Popen(
                 cmd,
                 cwd=str(PROJECT_ROOT), 
@@ -810,6 +831,7 @@ def admin_start():
             )
             app.config["APP_RUNNING"] = True
             main_app_logs.append(f"{datetime.now()} - Main app started.")
+            
             threading.Thread(target=capture_app_logs, args=(app_process,), daemon=True).start()
             return jsonify({"status": "started"}), 200
         except Exception as e:
@@ -871,7 +893,7 @@ def serve_spa(path):
 
 def auto_start_main_app():
     """Auto-start the main app when admin server starts"""
-    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true' and os.getenv("FLASK_ENV") == "development":
+    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true' or os.getenv("FLASK_ENV") == "development":
         return
     def delayed_start():
         time.sleep(10)

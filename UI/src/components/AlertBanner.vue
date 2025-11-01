@@ -15,6 +15,7 @@ const fetchAlerts = async () => {
     console.log('API Response:', data);
     
     if (data.alerts && data.alerts.length > 0) {
+      // Remove duplicate alerts
       const uniqueAlerts = data.alerts.filter((alert, index, arr) => {
         const alertKey = `${alert.header}-${alert.description}-${alert.routes}-${alert.alert_type || ''}`;
         return arr.findIndex(a => `${a.header}-${a.description}-${a.routes}-${a.alert_type || ''}` === alertKey) === index;
@@ -23,25 +24,27 @@ const fetchAlerts = async () => {
       alerts.value = uniqueAlerts;
       console.log('Unique alerts:', uniqueAlerts);
       
+      // Format alerts for display
       const combinedAlerts = uniqueAlerts
         .map((alert) => {
-          // Handle different alert types
+          // GENERAL NETWORK ALERTS (whole STM network)
           if (alert.alert_type === "general_network") {
-            return `🚨 ${alert.header}: ${alert.description}`;
-          } else if (alert.alert_type === "route_specific") {
+            return `🚨 RÉSEAU STM: ${alert.header} - ${alert.description}`;
+          } 
+          // ROUTE-SPECIFIC ALERTS (buses 36, 61)
+          else if (alert.alert_type === "route_specific") {
             return `🚌 Ligne(s) ${alert.routes}: ${alert.header} - ${alert.description}`;
-          } else if (alert.alert_type === "metro") {
+          } 
+          // METRO ALERTS
+          else if (alert.alert_type === "metro") {
             return `🚇 ${alert.header}: ${alert.description}`;
-          } else if (alert.routes === "Custom" && alert.stop === "Message") {
-            return `${alert.header}: ${alert.description}`;
-          } else if (alert.routes) {
-            // Legacy STM alerts format
-            return `Ligne(s) : ${alert.routes} (${alert.stop}): ${alert.header} - ${alert.description}`;
-          } else if (alert.train_route) {
-            // EXO alerts
-            return `Train ${alert.train_route}: ${alert.header} - ${alert.description}`;
-          } else {
-            // Fallback for other alerts
+          } 
+          // CUSTOM MESSAGES
+          else if (alert.routes === "Custom" && alert.stop === "Message") {
+            return `📢 ${alert.header}: ${alert.description}`;
+          }
+          // FALLBACK FORMAT
+          else {
             return `${alert.header}: ${alert.description}`;
           }
         })
@@ -49,7 +52,7 @@ const fetchAlerts = async () => {
       
       allAlertsText.value = combinedAlerts;
       showBanner.value = true;
-      console.log('Banner should show with text:', combinedAlerts);
+      console.log('Banner showing with text:', combinedAlerts);
     } else {
       console.log('No alerts found, hiding banner');
       showBanner.value = false;
