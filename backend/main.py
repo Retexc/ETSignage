@@ -108,6 +108,11 @@ def process_metro_alerts():
     """
     Fetch and process metro line alerts from STM API.
     Returns a list of metro lines with simplified status display.
+    
+    FIXED: Now properly detects:
+    - Network-wide alerts (strikes) via agency_id == "STM"
+    - Individual line alerts via route_short_name
+    - Individual line alerts via route_id
     """
     try:
         # Fetch all STM alerts
@@ -159,33 +164,92 @@ def process_metro_alerts():
                 try:
                     informed_entities = alert.get("informed_entities", [])
                     
+                    # Get French header and description for this alert
+                    header_texts = alert.get("header_texts", [])
+                    description_texts = alert.get("description_texts", [])
+                    
+                    # Debug: Log what we're getting from the API
+                    logger.debug(f"Alert header_texts: {header_texts}")
+                    logger.debug(f"Alert description_texts: {description_texts}")
+                    
+                    header = ""
+                    description = ""
+                    for ht in header_texts:
+                        if ht.get("language") == "fr":
+                            header = ht.get("text", "")
+                            break
+                    
+                    for dt in description_texts:
+                        if dt.get("language") == "fr":
+                            description = dt.get("text", "")
+                            break
+                    
+                    # Remove HTML tags from description
+                    if description:
+                        description = re.sub(r'<[^>]+>', '', description).strip()
+                    
+                    # Debug: Log what we extracted
+                    logger.debug(f"Extracted header: '{header}'")
+                    logger.debug(f"Extracted description (cleaned): '{description}'")
+                    
+                    # Check if this is a network-wide alert (affects all metro)
+                    is_network_wide = False
+                    affected_metro_lines = []
+                    
                     for entity in informed_entities:
-                        # Check if this is a metro alert
+                        # Check for agency-wide alert (like strikes)
+                        if entity.get("agency_id") == "STM":
+                            is_network_wide = True
+                            logger.info(f"[ALERT] Detected network-wide STM alert: {header[:50]}...")
+                        
+                        # Check for specific metro line alerts using route_short_name
+                        route_short_name = entity.get("route_short_name", "")
                         route_id = entity.get("route_id", "")
                         
-                        # Metro routes in STM are typically "1", "2", "4", "5"
-                        if route_id in metro_status:
-                            # Get French header text
-                            header_texts = alert.get("header_texts", [])
-                            header = ""
-                            for ht in header_texts:
-                                if ht.get("language") == "fr":
-                                    header = ht.get("text", "")
-                                    break
-                            
-                            if header:
-                                route_short_name = route_id
-                                metro_status[route_short_name]["is_normal"] = False
-                                metro_status[route_short_name]["status"] = "Service perturbé"
-                                metro_status[route_short_name]["alert_description"] = header
-                                metro_status[route_short_name]["statusColor"] = "text-red-400"
+                        # Metro routes can be in either field
+                        metro_line = route_short_name if route_short_name in ["1", "2", "4", "5"] else (route_id if route_id in ["1", "2", "4", "5"] else None)
+                        
+                        if metro_line:
+                            affected_metro_lines.append(metro_line)
+                            logger.info(f"[ALERT] Detected alert for metro line {metro_line}: {header[:50]}...")
+                    
+                    # Apply the alert to affected lines
+                    if is_network_wide:
+                        # Network-wide alert affects all metro lines
+                        # Use description first (it has the real message), fallback to header
+                        alert_text = description or header
+                        logger.warning(f"[WARNING] APPLYING NETWORK-WIDE ALERT TO ALL METRO LINES")
+                        logger.info(f"   Alert text: '{alert_text}'")
+                        for line_id in metro_status.keys():
+                            metro_status[line_id]["is_normal"] = False
+                            metro_status[line_id]["status"] = "Service perturbé"
+                            metro_status[line_id]["alert_description"] = alert_text
+                            metro_status[line_id]["statusColor"] = "text-red-400"
+                    elif affected_metro_lines:
+                        # Apply alert to specific metro lines
+                        # Use description first (it has the real message), fallback to header
+                        alert_text = description or header
+                        logger.warning(f"[WARNING] APPLYING ALERT TO LINES: {', '.join(affected_metro_lines)}")
+                        logger.info(f"   Alert text: '{alert_text}'")
+                        for line_id in affected_metro_lines:
+                            metro_status[line_id]["is_normal"] = False
+                            metro_status[line_id]["status"] = "Service perturbé"
+                            metro_status[line_id]["alert_description"] = alert_text
+                            metro_status[line_id]["statusColor"] = "text-red-400"
                         
                 except Exception as e:
                     logger.error(f"Error processing individual metro alert: {e}")
+                    import traceback
+                    traceback.print_exc()
                     continue
         
         # Convert to list format for frontend
         result = list(metro_status.values())
+        logger.info(f"[STATUS] Final Metro Status:")
+        for line in result:
+            status_text = "NORMAL" if line["is_normal"] else "DISRUPTED"
+            logger.info(f"  [{status_text}] {line['name']} ({line['color']}): {line['status']}")
+        
         return result
         
     except Exception as e:
@@ -294,6 +358,21 @@ def get_data():
                     alert_obj["stop"] = "N/A"
                 
                 filtered_alerts.append(alert_obj)
+            
+            # ===== ADD METRO ALERTS TO THE BANNER =====
+            logger.info("[METRO] Checking metro lines for alerts to add to banner...")
+            for metro_line in metro_lines:
+                if not metro_line.get("is_normal") and metro_line.get("alert_description"):
+                    metro_alert = {
+                        "header": f"Métro {metro_line['name']} - {metro_line['color']}",
+                        "description": metro_line["alert_description"],
+                        "routes": f"Métro {metro_line['color']}",
+                        "stop": "Métro",
+                        "alert_type": "metro",
+                        "severity": "warning"
+                    }
+                    filtered_alerts.append(metro_alert)
+                    logger.info(f"  [OK] Added metro alert to banner: {metro_alert['header']}")
                 
         except Exception as e:
             logger.error(f"ERROR processing STM alerts: {e}")

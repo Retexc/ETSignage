@@ -122,11 +122,35 @@ def fetch_stm_vehicle_positions():
         print(f"API Error: {response.status_code} - {response.text}")
         return []   
 
+
+# Cache for STM alerts to avoid rate limits
+_stm_alerts_cache = {
+    "timestamp": 0,
+    "data": None
+}
+STM_ALERTS_CACHE_TTL = 30  # Cache alerts for 30 seconds
+
 def fetch_stm_alerts():
     """
-    Fetch alerts from STM API.
-    Returns JSON data with alerts.
+    Fetch alerts from STM API and normalize to consistent format.
+    Uses caching to avoid hitting rate limits (10 req/sec, 10k req/day).
+    Returns JSON data with alerts in standardized format with:
+    - informed_entities (list)
+    - header_texts (list with language/text dicts)
+    - description_texts (list with language/text dicts)
     """
+    global _stm_alerts_cache
+    
+    # Check if cache is still valid
+    current_time = time.time()
+    if current_time - _stm_alerts_cache["timestamp"] < STM_ALERTS_CACHE_TTL:
+        if _stm_alerts_cache["data"] is not None:
+            print(f"[CACHE] Using cached STM alerts (age: {int(current_time - _stm_alerts_cache['timestamp'])}s)")
+            return _stm_alerts_cache["data"]
+    
+    # Cache expired or empty, fetch fresh data
+    print("[API] Fetching fresh STM alerts from API...")
+    
     headers = {
         "accept": "application/json",
         "apiKey": STM_API_KEY,
@@ -150,33 +174,125 @@ def fetch_stm_alerts():
                     # Also check for alerts in result
                     alerts = result.get("alerts", [])
                     if alerts:
-                        return alerts
+                        # Normalize alert format
+                        normalized = _normalize_alerts(alerts)
+                        _stm_alerts_cache["data"] = normalized
+                        _stm_alerts_cache["timestamp"] = current_time
+                        return normalized
                     elif metro_lines:
-                        # Convert metro line info to alert format
+                        # Convert metro line info to normalized alert format
                         converted_alerts = []
                         for line in metro_lines:
-                            if line.get("etat", {}).get("etat") != "NORMAL":
+                            etat_obj = line.get("etat", {})
+                            etat_status = etat_obj.get("etat", "NORMAL")
+                            
+                            # Only create alert if not normal
+                            if etat_status != "NORMAL":
+                                libelle = etat_obj.get("libelle", "Service perturbé")
+                                detail = etat_obj.get("detail", libelle)
+                                numero = line.get("numero", "")
+                                
                                 alert = {
-                                    "informed_entity": [{"route_short_name": line.get("numero")}],
-                                    "header_text": {"translation": [{"text": line.get("etat", {}).get("libelle", "")}]},
-                                    "description_text": {"translation": [{"text": line.get("etat", {}).get("detail", "")}]}
+                                    "informed_entities": [{"route_short_name": numero}],
+                                    "header_texts": [{"language": "fr", "text": libelle}],
+                                    "description_texts": [{"language": "fr", "text": detail}]
                                 }
                                 converted_alerts.append(alert)
+                        _stm_alerts_cache["data"] = converted_alerts
+                        _stm_alerts_cache["timestamp"] = current_time
                         return converted_alerts
+                    
+                    # No alerts found
+                    _stm_alerts_cache["data"] = []
+                    _stm_alerts_cache["timestamp"] = current_time
                     return []
                     
             # Fallback to old format
             elif isinstance(json_data, dict) and "alerts" in json_data:
-                return json_data["alerts"]
+                normalized = _normalize_alerts(json_data["alerts"])
+                _stm_alerts_cache["data"] = normalized
+                _stm_alerts_cache["timestamp"] = current_time
+                return normalized
             elif isinstance(json_data, list):
-                return json_data
+                normalized = _normalize_alerts(json_data)
+                _stm_alerts_cache["data"] = normalized
+                _stm_alerts_cache["timestamp"] = current_time
+                return normalized
             else:
-                print(f"Unexpected STM alerts response format: {json_data}")
-                return []
-        return []
+                print(f"Unexpected STM alerts response format: {type(json_data)}")
+                return _stm_alerts_cache["data"] or []
+        else:
+            print(f"[ERROR] STM API Error: {response.status_code} - {response.text}")
+            # Return cached data if available even if stale
+            return _stm_alerts_cache["data"] or []
     except Exception as e:
-        print(f"Error fetching alerts: {str(e)}")
-        return []
+        print(f"[ERROR] Error fetching alerts: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Return cached data if available even if stale
+        return _stm_alerts_cache["data"] or []
+
+def _normalize_alerts(alerts):
+    """
+    Normalize alert format to ensure consistent field names.
+    Converts old format (informed_entity, header_text) to new format (informed_entities, header_texts).
+    """
+    normalized = []
+    for alert in alerts:
+        if not isinstance(alert, dict):
+            continue
+            
+        normalized_alert = {}
+        
+        # Normalize informed_entities (handle both singular and plural)
+        if "informed_entities" in alert:
+            normalized_alert["informed_entities"] = alert["informed_entities"]
+        elif "informed_entity" in alert:
+            normalized_alert["informed_entities"] = alert["informed_entity"]
+        else:
+            normalized_alert["informed_entities"] = []
+        
+        # Normalize header_texts
+        if "header_texts" in alert:
+            normalized_alert["header_texts"] = alert["header_texts"]
+        elif "header_text" in alert:
+            # Convert old format to new format
+            header_text = alert["header_text"]
+            if isinstance(header_text, dict) and "translation" in header_text:
+                normalized_alert["header_texts"] = [
+                    {"language": t.get("language", "fr"), "text": t.get("text", "")}
+                    for t in header_text["translation"]
+                ]
+            else:
+                normalized_alert["header_texts"] = []
+        else:
+            normalized_alert["header_texts"] = []
+        
+        # Normalize description_texts
+        if "description_texts" in alert:
+            normalized_alert["description_texts"] = alert["description_texts"]
+        elif "description_text" in alert:
+            # Convert old format to new format
+            description_text = alert["description_text"]
+            if isinstance(description_text, dict) and "translation" in description_text:
+                normalized_alert["description_texts"] = [
+                    {"language": t.get("language", "fr"), "text": t.get("text", "")}
+                    for t in description_text["translation"]
+                ]
+            else:
+                normalized_alert["description_texts"] = []
+        else:
+            normalized_alert["description_texts"] = []
+        
+        # Copy over other fields that might be useful
+        for key in ["active_periods", "cause", "effect"]:
+            if key in alert:
+                normalized_alert[key] = alert[key]
+        
+        normalized.append(normalized_alert)
+    
+    return normalized
+
 
 def fetch_stm_general_alerts():
     """

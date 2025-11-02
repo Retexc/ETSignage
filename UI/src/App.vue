@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, watch, computed, ref } from 'vue';
+import { onMounted, onUnmounted, watch, computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from './stores/authStore';
 import Sidebar from "./components/SideBar.vue";
@@ -20,17 +20,32 @@ const shouldShowContent = computed(() => {
   return isAppReady.value && isRouteReady.value;
 });
 
+// 🎯 Liste des routes publiques (qui ne nécessitent PAS de connexion)
+const publicRoutes = ['/login', '/password', '/forgot-password', '/reset-password', '/display', '/stm'];
+
+// ⏰ Fonction qui détecte l'activité de l'utilisateur
+// À chaque fois que l'utilisateur bouge la souris, clique, tape, ou fait défiler,
+// on réinitialise le timer d'inactivité
+function handleUserActivity() {
+  // On réinitialise le timer seulement si l'utilisateur est connecté
+  // et qu'on n'est pas sur une page publique
+  if (authStore.isAuthenticated && !publicRoutes.includes(route.path)) {
+    authStore.resetInactivityTimer();
+  }
+}
+
 // Vérifier si l'utilisateur est connecté au démarrage de l'app
 onMounted(async () => {
   console.log('🚀 App démarrée - Vérification de l\'authentification...');
   
+  // Initialiser l'écoute des changements d'authentification
   authStore.initAuthListener();
   
   // Vérifier s'il y a un utilisateur connecté
   const user = await authStore.checkUser();
   
-  // Si personne n'est connecté ET qu'on n'est pas déjà sur /login ou /password
-  if (!user && route.path !== '/login' && route.path !== '/password') {
+  // Si personne n'est connecté ET qu'on n'est pas sur une route publique
+  if (!user && !publicRoutes.includes(route.path)) {
     console.log('❌ Pas d\'utilisateur connecté - Redirection vers /login');
     router.push('/login');
   } else if (user) {
@@ -38,17 +53,47 @@ onMounted(async () => {
   }
   
   isAppReady.value = true;
+
+  // ⏰ Ajouter les écouteurs d'événements pour détecter l'activité
+  // Ces événements vont réinitialiser le timer à chaque fois que l'utilisateur fait quelque chose
+  window.addEventListener('mousemove', handleUserActivity);
+  window.addEventListener('mousedown', handleUserActivity);
+  window.addEventListener('keypress', handleUserActivity);
+  window.addEventListener('scroll', handleUserActivity);
+  window.addEventListener('touchstart', handleUserActivity);
 });
 
-watch(() => route.path, () => {
+// ⏰ Nettoyer les écouteurs quand l'app se ferme
+onUnmounted(() => {
+  window.removeEventListener('mousemove', handleUserActivity);
+  window.removeEventListener('mousedown', handleUserActivity);
+  window.removeEventListener('keypress', handleUserActivity);
+  window.removeEventListener('scroll', handleUserActivity);
+  window.removeEventListener('touchstart', handleUserActivity);
+  
+  // Arrêter le timer d'inactivité
+  authStore.clearInactivityTimer();
+});
+
+watch(() => route.path, (newPath) => {
   isRouteReady.value = false;
   setTimeout(() => {
     isRouteReady.value = true;
   }, 50);
+
+  // ⏰ Gestion du timer selon la route
+  // Si on va sur une route publique, on arrête le timer
+  if (publicRoutes.includes(newPath)) {
+    authStore.clearInactivityTimer();
+  } 
+  // Si on va sur une route protégée et qu'on est connecté, on démarre le timer
+  else if (authStore.isAuthenticated) {
+    authStore.startInactivityTimer();
+  }
 }, { immediate: true });
 
 watch(() => authStore.user, (newUser) => {
-  if (!newUser && route.path !== '/login' && route.path !== '/password') {
+  if (!newUser && !publicRoutes.includes(route.path)) {
     console.log('👋 Utilisateur déconnecté - Redirection vers /login');
     router.push('/login');
   }

@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from "vue";
 
+const currentDate = ref('');
 const currentTime = ref('');
 const weather = ref({
   icon: '',
@@ -18,6 +19,16 @@ const updateTime = () => {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true
+  });
+};
+
+const updateDate = () => {
+  const now = new Date();
+  
+  currentDate.value = now.toLocaleDateString('fr-CA', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
   });
 };
 
@@ -40,6 +51,9 @@ const fetchWeatherData = async () => {
 };
 
 onMounted(() => {
+  updateDate();
+  timeInterval = setInterval(updateDate, 60000); 
+
   updateTime();
   timeInterval = setInterval(updateTime, 1000);
   
@@ -59,9 +73,10 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex flex-row justify-between items-center bg-white p-2 py-4">
-    <img src="../assets/icons/ETS.svg" alt="Bdeblogo" class="w-16 ml-6"></img>
-    
-    <div class="flex flex-row items-center gap-4 mr-6">
+    <!-- LEFT SIDE: Logo + Weather -->
+    <div class="flex flex-row items-center gap-4 ml-6">
+      <img src="../assets/icons/ETS.svg" alt="ETS Logo" class="w-16"></img>
+      
       <!-- Weather section -->
       <div v-if="weather.icon" class="flex flex-row items-center gap-2">
         <img :src="weather.icon" :alt="weather.text" class="w-8 h-8" />
@@ -69,8 +84,11 @@ onBeforeUnmount(() => {
           {{ weather.temp }}°C {{ weather.text }}
         </span>
       </div>
-      
-      <!-- Clock -->
+    </div>
+
+    <!-- RIGHT SIDE: Date + Time -->
+    <div class="flex flex-row items-center gap-4 mr-6">
+      <h1 class="text-black font-bold text-3xl">{{ currentDate }}</h1>       
       <h1 class="text-black font-bold text-3xl">{{ currentTime }}</h1>
     </div>
   </div>
