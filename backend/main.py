@@ -61,7 +61,6 @@ if missing:
     for m in missing:
         print(f"   • {m}")
     print("\nS'il-vous-plaît, téléchargez les fichiers manquants dans le menu paramètres et relancez l'application.")
-    sys.exit(1)
 # ────────────────────────────────────────────────────────────────
 
 # ====================================================================
