@@ -1,11 +1,11 @@
 <script setup>
 import { motion } from "motion-v";
-import ImportField from "../components/ImportField.vue";
 import ConfirmButton from "../components/ConfirmButton.vue";
 import { ref, watch, onMounted, onBeforeUnmount } from "vue";
 import { Linkedin } from "lucide-vue-next";
 import { Github } from "lucide-vue-next";
 import { useUpdateStore } from "../composables/useUpdateStore.js";
+import { uploadFile, getLastGTFSUpdate } from "../lib/supabaseStorage.js";
 
 const tabs = [
   { id: "gtfs", label: "GTFS" },
@@ -34,6 +34,12 @@ const settings = ref({
   autoUpdateTime: "02:00",
 });
 let updateTimeout = null;
+
+// États pour les uploads GTFS
+const isUploadingSTM = ref(false);
+const isUploadingEXO = ref(false);
+const stmFileInputRef = ref(null);
+const exoFileInputRef = ref(null);
 
 function scheduleNextUpdate() {
   if (updateTimeout !== null) {
@@ -80,48 +86,87 @@ function scheduleNextUpdate() {
   }, msUntilNext);
 }
 
+// Fonction pour uploader GTFS vers Supabase
 async function uploadGTFS(transport, file) {
-  const formData = new FormData();
-  formData.append("transport", transport);
-  formData.append("gtfs_zip", file);
+  if (!file) return;
+  
+  // Vérifier que c'est bien un fichier ZIP
+  if (!file.name.endsWith('.zip')) {
+    alert('Le fichier doit être un fichier ZIP (.zip)');
+    return;
+  }
+  
+  const isSTM = transport === 'stm';
+  const uploadingRef = isSTM ? isUploadingSTM : isUploadingEXO;
+  
+  uploadingRef.value = true;
   
   try {
-    const res = await fetch("/admin/update_gtfs", {
-      method: "POST",
-      body: formData,
-    });
+    console.log(`📤 Upload du fichier GTFS ${transport.toUpperCase()}...`);
     
-    if (res.ok) {
-      console.log(`${transport.toUpperCase()} GTFS uploaded successfully`);
-      await fetchLastUpdates(); // Refresh the last update info
-    } else {
-      console.error("Upload error:", res.statusText);
+    // Upload vers Supabase Storage dans le bucket gtfs-files
+    const result = await uploadFile(file, 'gtfs-files', transport);
+    
+    if (!result.success) {
+      alert(`Erreur lors de l'upload: ${result.error}`);
+      console.error('❌ Erreur upload GTFS:', result.error);
+      return;
     }
-  } catch (e) {
-    console.error("Network error uploading GTFS:", e);
+    
+    console.log(`✅ Fichier GTFS ${transport.toUpperCase()} uploadé avec succès:`, result.url);
+    alert(`✅ Fichier GTFS ${transport.toUpperCase()} uploadé avec succès!`);
+    
+    // Rafraîchir les dates de dernière mise à jour
+    await fetchLastUpdates();
+    
+  } catch (error) {
+    console.error('❌ Erreur lors de l\'upload GTFS:', error);
+    alert(`Une erreur s'est produite lors de l'upload: ${error.message}`);
+  } finally {
+    uploadingRef.value = false;
   }
 }
 
+// Fonctions pour déclencher le sélecteur de fichier
+function openSTMFileSelector() {
+  stmFileInputRef.value?.click();
+}
+
+function openEXOFileSelector() {
+  exoFileInputRef.value?.click();
+}
+
+// Gestionnaires de changement de fichier
 function onStmFileChange(e) {
   const file = e.target.files[0];
-  if (file) uploadGTFS("stm", file);
+  if (file) {
+    uploadGTFS("stm", file);
+  }
+  // Réinitialiser l'input pour permettre de re-uploader le même fichier
+  e.target.value = '';
 }
 
 function onExoFileChange(e) {
   const file = e.target.files[0];
-  if (file) uploadGTFS("exo", file);
+  if (file) {
+    uploadGTFS("exo", file);
+  }
+  // Réinitialiser l'input pour permettre de re-uploader le même fichier
+  e.target.value = '';
 }
 
+// Récupérer les dates de dernière mise à jour depuis Supabase
 async function fetchLastUpdates() {
   try {
-    const res = await fetch("/admin/gtfs_update_info");
-    if (res.ok) {
-      const data = await res.json();
-      stmLastUpdate.value = data.stm || "N/A";
-      exoLastUpdate.value = data.exo || "N/A";
-    }
+    const stmDate = await getLastGTFSUpdate('stm');
+    const exoDate = await getLastGTFSUpdate('exo');
+    
+    stmLastUpdate.value = stmDate;
+    exoLastUpdate.value = exoDate;
+    
+    console.log('✅ Dates de mise à jour récupérées:', { stm: stmDate, exo: exoDate });
   } catch (e) {
-    console.warn("Failed to load GTFS info:", e);
+    console.warn('⚠️ Erreur lors de la récupération des infos GTFS:', e);
   }
 }
 
@@ -249,10 +294,11 @@ function getCurrentUpdateState() {
                 >
                   STM : Développeurs | Société de transport de Montréal
                 </a>
-
               </li>
             </ul>
           </div>
+          
+          <!-- Section STM -->
           <div class="flex flex-col space-y-6">
             <img
               src="../assets/images/stm_logo.svg"
@@ -260,19 +306,44 @@ function getCurrentUpdateState() {
               class="gtfs-logo mb-3 h-10 self-start"
             />
             <hr class="border-t border-[#404040] mt-3" />
-            <div class="flex flex-col space-y-2">
-              <ImportField
-                transport="stm"
-                placeholder="GTFS STM (.zip)"
-                @done="(file) => uploadGTFS('stm', file)"
-                @error="(err) => console.error('STM import error', err)"
+            
+            <div class="flex flex-col space-y-4">
+              <!-- Bouton d'import STM -->
+              <div class="flex items-center justify-between bg-white rounded-lg p-4 shadow">
+                <div class="flex-1">
+                  <h4 class="font-semibold text-lg">Fichier GTFS (ZIP)</h4>
+                  <p class="text-sm text-gray-600">
+                    Dernière mise à jour : {{ stmLastUpdate }}
+                  </p>
+                </div>
+                <button
+                  @click="openSTMFileSelector"
+                  :disabled="isUploadingSTM"
+                  class="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg v-if="!isUploadingSTM" class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                  </svg>
+                  <svg v-else class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  {{ isUploadingSTM ? 'Upload en cours...' : 'Importer' }}
+                </button>
+              </div>
+              
+              <!-- Input file caché pour STM -->
+              <input
+                ref="stmFileInputRef"
+                type="file"
+                accept=".zip"
+                @change="onStmFileChange"
+                class="hidden"
               />
-              <p class="text-sm text-black">
-                Dernière mise à jour : {{ stmLastUpdate }}
-              </p>
             </div>
           </div>
         </motion.div>
+        
         <motion.div
         v-else-if="active === 'update'"
         :key="'update_tab'"
@@ -364,6 +435,7 @@ function getCurrentUpdateState() {
             />
           </div>
         </motion.div>
+        
         <motion.div
         v-else-if="active === 'about'"
         :key="'about_tab'"

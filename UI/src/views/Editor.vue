@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from "vue";
 import { useAnnonceStore } from '../stores/annonceStore.js'
 import draggable from 'vuedraggable'
+import { uploadFile, deleteFile } from '../lib/supabaseStorage.js'
 
 export default {
   name: "AnnonceEditorWithMedia",
@@ -16,136 +17,13 @@ export default {
     const isUploading = ref(false);
     const editingPageId = ref(null);
     const tempPageName = ref("");
-    
-    let db = null;
 
-    // INDEXEDDB : Initialiser la base de données
-    const initDB = () => {
-      return new Promise((resolve, reject) => {
-        const request = indexedDB.open('AnnonceMediaDB', 1);
-        
-        request.onerror = () => {
-          console.error('❌ Erreur ouverture IndexedDB');
-          reject(request.error);
-        };
-        
-        request.onsuccess = () => {
-          db = request.result;
-          console.log('✅ IndexedDB initialisée');
-          resolve(db);
-        };
-        
-        request.onupgradeneeded = (event) => {
-          db = event.target.result;
-          
-          if (!db.objectStoreNames.contains('mediaFiles')) {
-            db.createObjectStore('mediaFiles', { keyPath: 'id' });
-            console.log('✅ Store mediaFiles créé');
-          }
-        };
-      });
-    };
-
-    // INDEXEDDB : Sauvegarder un fichier
-    const saveFileToIndexedDB = (id, file) => {
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction(['mediaFiles'], 'readwrite');
-        const store = transaction.objectStore('mediaFiles');
-        
-        const data = {
-          id: id,
-          file: file,
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          timestamp: Date.now()
-        };
-        
-        const request = store.put(data);
-        
-        request.onsuccess = () => {
-          console.log('✅ Fichier sauvegardé dans IndexedDB:', id);
-          resolve(id);
-        };
-        
-        request.onerror = () => {
-          console.error('❌ Erreur sauvegarde IndexedDB');
-          reject(request.error);
-        };
-      });
-    };
-
-    // INDEXEDDB : Récupérer un fichier
-    const getFileFromIndexedDB = (id) => {
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction(['mediaFiles'], 'readonly');
-        const store = transaction.objectStore('mediaFiles');
-        const request = store.get(id);
-        
-        request.onsuccess = () => {
-          if (request.result) {
-            console.log('✅ Fichier récupéré depuis IndexedDB:', id);
-            resolve(request.result.file);
-          } else {
-            console.warn('⚠️ Fichier non trouvé:', id);
-            resolve(null);
-          }
-        };
-        
-        request.onerror = () => {
-          console.error('❌ Erreur récupération IndexedDB');
-          reject(request.error);
-        };
-      });
-    };
-
-    // INDEXEDDB : Supprimer un fichier
-    const deleteFileFromIndexedDB = (id) => {
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction(['mediaFiles'], 'readwrite');
-        const store = transaction.objectStore('mediaFiles');
-        const request = store.delete(id);
-        
-        request.onsuccess = () => {
-          console.log('✅ Fichier supprimé de IndexedDB:', id);
-          resolve();
-        };
-        
-        request.onerror = () => {
-          console.error('❌ Erreur suppression IndexedDB');
-          reject(request.error);
-        };
-      });
-    };
-
-    // FONCTION : Charger les médias depuis IndexedDB
-    const loadMediaFromIndexedDB = async () => {
-      for (const annonce of annonces.value) {
-        if (annonce.media) {
-          try {
-            const file = await getFileFromIndexedDB(annonce.media);
-            if (file) {
-              annonce.mediaURL = URL.createObjectURL(file);
-            } else {
-              console.warn('⚠️ Média manquant pour:', annonce.nom);
-              annonce.media = null;
-              annonce.mediaURL = null;
-            }
-          } catch (error) {
-            console.error('❌ Erreur chargement média:', error);
-          }
-        }
-      }
-    };
-
-    // Charger les annonces
+    // Charger les annonces au démarrage
     onMounted(async () => {
-      await initDB();
       annonceStore.chargerLocal()
       
       if (annonceStore.annonces.length > 0) {
         annonces.value = [...annonceStore.annonces]
-        await loadMediaFromIndexedDB()
       }
     })
 
@@ -172,36 +50,21 @@ export default {
     // Synchroniser avec le store
     watch(annonces, (newAnnonces) => {
       const annoncesToSave = newAnnonces.map(a => {
-        const { mediaURL, ...rest } = a;
-        return rest;
-      });
-      annonceStore.setAnnonces(annoncesToSave)
-      annonceStore.sauvegarderLocal()
+        const { mediaURL, ...rest } = a
+        return rest
+      })
+      annonceStore.sauvegarderAnnonces(annoncesToSave)
     }, { deep: true })
 
     const pageSelectionnee = computed(() => {
       return annonces.value.find((a) => a.id === pageActive.value);
     });
 
-    const getNextPageNumber = () => {
-      const pageNumbers = annonces.value
-        .map(a => {
-          const match = a.nom.match(/Page (\d+)/)
-          return match ? parseInt(match[1]) : 0
-        })
-        .filter(num => num > 0)
-      
-      if (pageNumbers.length === 0) return 1
-      return Math.max(...pageNumbers) + 1
-    }
-
     const ajouterPage = () => {
       const nouvelId = Math.max(...annonces.value.map((a) => a.id), 0) + 1;
-      const nextPageNumber = getNextPageNumber();
-      
       const nouvellePage = {
         id: nouvelId,
-        nom: `Page ${nextPageNumber}`,
+        nom: `Page ${nouvelId}`,
         media: null,
         mediaURL: null,
         mediaType: null,
@@ -214,72 +77,52 @@ export default {
         transition: "fade",
         modeAffichage: "cover",
         loop: false,
-      }
+      };
       annonces.value.push(nouvellePage);
       pageActive.value = nouvelId;
     };
 
     const supprimerPage = async (id) => {
-      if (annonces.value.length > 1) {
-        const index = annonces.value.findIndex(a => a.id === id);
-        const pageASupprimer = annonces.value[index];
-        
-        if (pageASupprimer.media) {
-          await deleteFileFromIndexedDB(pageASupprimer.media);
-          if (pageASupprimer.mediaURL) {
-            URL.revokeObjectURL(pageASupprimer.mediaURL);
-          }
+      const pageToDelete = annonces.value.find(a => a.id === id);
+      
+      // Supprimer le média de Supabase si présent
+      if (pageToDelete && pageToDelete.mediaURL) {
+        try {
+          await deleteFile(pageToDelete.mediaURL, 'backgrounds');
+          console.log('✅ Média supprimé de Supabase');
+        } catch (error) {
+          console.error('❌ Erreur suppression média:', error);
         }
-        
-        annonces.value.splice(index, 1);
-
-        if (pageASupprimer.id === pageActive.value) {
-          pageActive.value = annonces.value[0]?.id;
-        }
-      } else {
-        alert("Vous devez garder au moins une page!");
+      }
+      
+      annonces.value = annonces.value.filter((a) => a.id !== id);
+      
+      if (pageActive.value === id) {
+        pageActive.value = annonces.value.length > 0 ? annonces.value[0].id : null;
       }
     };
 
-    const startEditingName = (annonce) => {
-      editingPageId.value = annonce.id
-      tempPageName.value = annonce.nom
-    }
-
-    const savePageName = (annonce) => {
-      if (tempPageName.value.trim()) {
-        annonce.nom = tempPageName.value.trim()
-      }
-      editingPageId.value = null
-      tempPageName.value = ""
-    }
-
-    const cancelEditingName = () => {
-      editingPageId.value = null
-      tempPageName.value = ""
-    }
-
     const ouvrirSelecteurFichier = () => {
-      fileInput.value?.click();
+      if (fileInput.value) {
+        fileInput.value.click();
+      }
     };
 
     const gererUploadFichier = async (event) => {
       const file = event.target.files[0];
-      if (!file) return;
-      if (!pageSelectionnee.value) return;
+      if (!file || !pageSelectionnee.value) return;
+
+      // Vérifier la taille (500 MB max)
+      const maxSize = 500 * 1024 * 1024;
+      if (file.size > maxSize) {
+        alert("Le fichier est trop volumineux. Taille maximale : 500 MB");
+        return;
+      }
+
+      isUploading.value = true;
 
       try {
-        isUploading.value = true;
-        console.log('📤 Upload du fichier:', file.name);
-
-        const maxSize = 500 * 1024 * 1024;
-        if (file.size > maxSize) {
-          alert(`Le fichier est trop volumineux (max 500MB). Taille: ${formatFileSize(file.size)}`);
-          isUploading.value = false;
-          event.target.value = "";
-          return;
-        }
-
+        // Déterminer le type de média
         let mediaType = null;
         if (file.type.startsWith("image/")) {
           mediaType = "image";
@@ -287,47 +130,40 @@ export default {
           mediaType = "video";
         } else if (file.type === "application/pdf") {
           mediaType = "pdf";
-        } else {
-          alert("Type de fichier non supporté");
+        }
+
+        if (!mediaType) {
+          alert("Format de fichier non supporté");
           isUploading.value = false;
-          event.target.value = "";
           return;
         }
 
-        if (pageSelectionnee.value.media) {
-          await deleteFileFromIndexedDB(pageSelectionnee.value.media);
-          if (pageSelectionnee.value.mediaURL) {
-            URL.revokeObjectURL(pageSelectionnee.value.mediaURL);
-          }
+        // Supprimer l'ancien média de Supabase s'il existe
+        if (pageSelectionnee.value.mediaURL) {
+          await deleteFile(pageSelectionnee.value.mediaURL, 'backgrounds');
         }
 
-        const fileId = `media_${pageSelectionnee.value.id}_${Date.now()}`;
-        await saveFileToIndexedDB(fileId, file);
-        const blobURL = URL.createObjectURL(file);
+        // Upload vers Supabase Storage
+        const result = await uploadFile(file, 'backgrounds');
         
-        console.log('✅ Fichier sauvegardé avec ID:', fileId);
+        if (!result.success) {
+          alert(`Erreur lors de l'upload: ${result.error}`);
+          isUploading.value = false;
+          return;
+        }
 
-        pageSelectionnee.value.media = fileId;
-        pageSelectionnee.value.mediaURL = blobURL;
+        // Mettre à jour l'annonce avec l'URL Supabase
+        pageSelectionnee.value.media = result.url;
+        pageSelectionnee.value.mediaURL = result.url;
         pageSelectionnee.value.mediaType = mediaType;
         pageSelectionnee.value.mediaName = file.name;
         pageSelectionnee.value.mediaSize = file.size;
 
-        if (mediaType === "video") {
-          const video = document.createElement("video");
-          video.src = blobURL;
-          video.onloadedmetadata = () => {
-            if (pageSelectionnee.value) {
-              pageSelectionnee.value.dureeAffichage = Math.round(video.duration);
-            }
-          };
-        }
+        console.log('✅ Média uploadé avec succès vers Supabase:', result.url);
 
-        console.log('✅ Média importé avec succès!');
-        
       } catch (error) {
         console.error('❌ Erreur lors de l\'upload:', error);
-        alert('Erreur lors de l\'upload du fichier');
+        alert("Une erreur s'est produite lors de l'upload");
       } finally {
         isUploading.value = false;
         event.target.value = "";
@@ -335,21 +171,24 @@ export default {
     };
 
     const supprimerMedia = async () => {
-      if (pageSelectionnee.value) {
-        if (pageSelectionnee.value.media) {
-          await deleteFileFromIndexedDB(pageSelectionnee.value.media);
+      if (!pageSelectionnee.value) return;
+      
+      // Supprimer de Supabase
+      if (pageSelectionnee.value.mediaURL) {
+        try {
+          await deleteFile(pageSelectionnee.value.mediaURL, 'backgrounds');
+          console.log('✅ Média supprimé de Supabase');
+        } catch (error) {
+          console.error('❌ Erreur suppression:', error);
         }
-        if (pageSelectionnee.value.mediaURL) {
-          URL.revokeObjectURL(pageSelectionnee.value.mediaURL);
-        }
-        
-        pageSelectionnee.value.media = null;
-        pageSelectionnee.value.mediaURL = null;
-        pageSelectionnee.value.mediaType = null;
-        pageSelectionnee.value.mediaName = null;
-        pageSelectionnee.value.mediaSize = null;
-        pageSelectionnee.value.dureeAffichage = 5;
       }
+      
+      // Réinitialiser les propriétés
+      pageSelectionnee.value.media = null;
+      pageSelectionnee.value.mediaURL = null;
+      pageSelectionnee.value.mediaType = null;
+      pageSelectionnee.value.mediaName = null;
+      pageSelectionnee.value.mediaSize = null;
     };
 
     const formatFileSize = (bytes) => {
@@ -357,81 +196,77 @@ export default {
       const k = 1024;
       const sizes = ["Bytes", "KB", "MB", "GB"];
       const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
+      return Math.round(bytes / Math.pow(k, i) * 100) / 100 + " " + sizes[i];
+    };
+
+    const startEditingName = (annonce) => {
+      editingPageId.value = annonce.id;
+      tempPageName.value = annonce.nom;
+    };
+
+    const finishEditingName = (annonce) => {
+      if (tempPageName.value.trim()) {
+        annonce.nom = tempPageName.value.trim();
+      }
+      editingPageId.value = null;
+      tempPageName.value = "";
+    };
+
+    const cancelEditingName = () => {
+      editingPageId.value = null;
+      tempPageName.value = "";
     };
 
     return {
       annonces,
       pageActive,
       pageSelectionnee,
-      fileInput,
-      isUploading,
-      editingPageId,
-      tempPageName,
       ajouterPage,
       supprimerPage,
-      startEditingName,
-      savePageName,
-      cancelEditingName,
+      fileInput,
       ouvrirSelecteurFichier,
       gererUploadFichier,
       supprimerMedia,
+      isUploading,
       formatFileSize,
+      editingPageId,
+      tempPageName,
+      startEditingName,
+      finishEditingName,
+      cancelEditingName,
     };
   },
 };
 </script>
 
 <template>
-  <div class="flex flex-row justify-between items-center bg-white p-2 py-4 drop-shadow-xl">
-    <div class="flex flex-row items-center mr-6 p-2">
-      <router-link to="/" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-2 rounded-lg inline-flex items-center">
-        <svg class="w-6 h-6 text-gray-800 dark:text-gray-700" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-          <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m4 12 8-8 8 8M6 10.5V19a1 1 0 0 0 1 1h3v-3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3h3a1 1 0 0 0 1-1v-8.5" />
-        </svg>
-      </router-link>
-      <div class="flex flex-row items-center gap-4">
-        <img src="../assets/icons/ETS.svg" alt="Bdeblogo" class="w-12 ml-6" />
-        <h1 class="text-black font-bold text-2xl">Editeur d'annonces</h1>
-      </div>
-    </div>
-  </div>
-
   <div class="flex h-screen bg-gray-100">
-    <!-- Menu gauche -->
-    <div class="w-80 bg-white shadow-lg p-4 flex flex-col">
-      <button @click="ajouterPage" class="w-full mb-4 py-3 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center justify-center transition-colors">
-        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-        </svg>
-        Ajouter une page
-      </button>
+    <!-- Panneau latéral gauche -->
+    <div class="w-64 bg-white shadow-lg flex flex-col">
+      <div class="p-4 bg-gray-800 text-white">
+        <h2 class="text-xl font-bold">Pages</h2>
+      </div>
+      
+      <div class="flex-1 overflow-y-auto p-4">
+        <button @click="ajouterPage" class="w-full mb-4 px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center justify-center transition-colors shadow-md">
+          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+          </svg>
+          Ajouter une page
+        </button>
 
-      <div class="flex-1 overflow-hidden">
-        <draggable v-model="annonces" item-key="id" class="space-y-2 h-full" :animation="200" handle=".drag-handle">
+        <draggable v-model="annonces" item-key="id" handle=".drag-handle" class="space-y-2">
           <template #item="{ element: annonce }">
-            <div :class="['p-3 rounded-lg cursor-pointer transition-all', pageActive === annonce.id ? 'bg-blue-100 border-2 border-blue-500' : 'bg-gray-50 hover:bg-gray-100']" @click="pageActive = annonce.id">
+            <div @click="pageActive = annonce.id" :class="['p-3 rounded-lg cursor-pointer transition-all', pageActive === annonce.id ? 'bg-blue-500 text-white shadow-lg' : 'bg-gray-200 hover:bg-gray-300']">
               <div class="flex items-center justify-between">
-                <div class="flex items-center flex-1 min-w-0">
-                  <svg class="w-5 h-5 text-gray-400 mr-2 drag-handle cursor-move flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
-                  </svg>
-
-                  <svg v-if="!annonce.media" class="w-6 h-6 text-gray-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                  </svg>
-                  <svg v-else-if="annonce.mediaType === 'image'" class="w-6 h-6 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"></path>
-                  </svg>
-                  <svg v-else-if="annonce.mediaType === 'video'" class="w-6 h-6 text-red-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"></path>
-                  </svg>
-                  <svg v-else-if="annonce.mediaType === 'pdf'" class="w-6 h-6 text-blue-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
-                  </svg>
-
+                <div class="flex items-center flex-1 min-w-0 mr-2">
+                  <div class="drag-handle mr-2 flex-shrink-0 cursor-move">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z"></path>
+                    </svg>
+                  </div>
                   <div class="flex-1 min-w-0">
-                    <input v-if="editingPageId === annonce.id" v-model="tempPageName" @click.stop @keyup.enter="savePageName(annonce)" @keyup.esc="cancelEditingName" @blur="savePageName(annonce)" class="w-full px-2 py-1 text-sm font-medium border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" autofocus />
+                    <input v-if="editingPageId === annonce.id" v-model="tempPageName" @blur="finishEditingName(annonce)" @keyup.enter="finishEditingName(annonce)" @keyup.esc="cancelEditingName" type="text" class="w-full px-2 py-1 text-sm bg-white text-black rounded border border-gray-300 focus:outline-none focus:border-blue-500" @click.stop />
                     <p v-else @dblclick.stop="startEditingName(annonce)" class="font-medium text-sm truncate cursor-text" :title="'Double-cliquez pour renommer'">{{ annonce.nom }}</p>
                     <p v-if="annonce.media" class="text-xs text-gray-500 truncate">{{ annonce.mediaName }}</p>
                   </div>
@@ -509,7 +344,7 @@ export default {
           <div class="text-center border-t pt-4">
             <p class="text-sm text-gray-600 font-medium">Formats acceptés : Images (JPG, PNG, GIF), Vidéos (MP4, WebM), PDF</p>
             <p class="text-xs text-gray-500 mt-1">Taille maximale : 500 MB</p>
-            <p class="text-xs text-green-600 mt-1 font-semibold">✅ Les fichiers sont sauvegardés de façon permanente</p>
+            <p class="text-xs text-green-600 mt-1 font-semibold">✅ Les fichiers sont sauvegardés dans Supabase (disponibles partout)</p>
           </div>
         </div>
       </div>
