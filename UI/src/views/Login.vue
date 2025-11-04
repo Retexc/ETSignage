@@ -92,7 +92,7 @@ async function onSubmit() {
           />
 
           <img
-            src="../assets/icons/signage.svg"
+            src="../assets/icons/Signage.svg"
             alt="Signage Logo"
             class="w-40 self-start mt-2 drop-shadow-2xl"
           />
