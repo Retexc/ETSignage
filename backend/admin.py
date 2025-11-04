@@ -761,7 +761,7 @@ def admin_update_gtfs():
         z.save(tmp_zip)
 
         with zipfile.ZipFile(tmp_zip, "r") as archive:
-            safe_extract(archive, staging)
+            archive.extractall(staging)
 
         entries = list(staging.iterdir())
         if len(entries) == 1 and entries[0].is_dir():
