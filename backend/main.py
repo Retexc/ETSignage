@@ -57,22 +57,22 @@ for fname in required_stm:
         missing.append(f"stm/{fname}")
 
 if missing:
-    print("Fichiers GTFS manquants:")
+    print("⚠️  Fichiers GTFS manquants:")
     for m in missing:
         print(f"   • {m}")
-    print("\nS'il-vous-plaît, téléchargez les fichiers manquants dans le menu paramètres et relancez l'application.")
-# ────────────────────────────────────────────────────────────────
-
-# ====================================================================
-# Load static GTFS data once at startup
-# ====================================================================
-stm_routes_fp      = os.path.join(STM_DIR,       "routes.txt")
-stm_trips_fp       = os.path.join(STM_DIR,       "trips.txt")
-stm_stop_times_fp  = os.path.join(STM_DIR,       "stop_times.txt")
-
-routes_map      = load_stm_routes(stm_routes_fp)
-stm_trips       = load_stm_gtfs_trips(stm_trips_fp, routes_map)
-stm_stop_times  = load_stm_stop_times(stm_stop_times_fp)
+    print("\nL'application démarre quand même. Téléchargez les fichiers GTFS via l'interface admin.")
+    routes_map = {}
+    stm_trips = []
+    stm_stop_times = {}
+else:
+    # Charger les fichiers 
+    stm_routes_fp = os.path.join(STM_DIR, "routes.txt")
+    stm_trips_fp = os.path.join(STM_DIR, "trips.txt")
+    stm_stop_times_fp = os.path.join(STM_DIR, "stop_times.txt")
+    
+    routes_map = load_stm_routes(stm_routes_fp)
+    stm_trips = load_stm_gtfs_trips(stm_trips_fp, routes_map)
+    stm_stop_times = load_stm_stop_times(stm_stop_times_fp)
 
 def get_weather():
     """Fetch weather from WeatherAPI at most once per CACHE_TTL."""
