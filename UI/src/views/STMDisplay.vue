@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import BusRow from "../components/BusRow.vue";
 import MetroRow from "../components/MetroRow.vue";
 import STMLogo from "../assets/icons/STM.png";
-import Background from "../assets/images/login_bg.jpg"
+import Background from "../assets/images/Login_bg.jpg"
 import AlertBanner from "../components/AlertBanner.vue";
 
 // Data from the API
