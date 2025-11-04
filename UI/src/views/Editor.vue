@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from "vue";
 import { useAnnonceStore } from '../stores/annonceStore.js'
 import draggable from 'vuedraggable'
-import { uploadFile, deleteFile } from '../lib/supabaseStorage.js'
+import { supabase } from '../lib/supabaseClient.js'
 
 export default {
   name: "AnnonceEditorWithMedia",
@@ -86,9 +86,9 @@ export default {
       const pageToDelete = annonces.value.find(a => a.id === id);
       
       // Supprimer le média de Supabase si présent
-      if (pageToDelete && pageToDelete.mediaURL) {
+      if (pageToDelete && pageToDelete.media) {
         try {
-          await deleteFile(pageToDelete.mediaURL, 'backgrounds');
+          await supabase.storage.from('backgrounds').remove([pageToDelete.media]);
           console.log('✅ Média supprimé de Supabase');
         } catch (error) {
           console.error('❌ Erreur suppression média:', error);
@@ -139,27 +139,50 @@ export default {
         }
 
         // Supprimer l'ancien média de Supabase s'il existe
-        if (pageSelectionnee.value.mediaURL) {
-          await deleteFile(pageSelectionnee.value.mediaURL, 'backgrounds');
+        if (pageSelectionnee.value.mediaURL && pageSelectionnee.value.media) {
+          try {
+            const oldFilePath = pageSelectionnee.value.media.split('/').pop();
+            await supabase.storage.from('backgrounds').remove([oldFilePath]);
+          } catch (err) {
+            console.warn('Erreur suppression ancien fichier:', err);
+          }
         }
 
+        // Créer un nom de fichier unique et sécurisé
+        const timestamp = Date.now();
+        const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const fileName = `${timestamp}-${safeFileName}`;
+
+        console.log('📤 Upload vers Supabase:', fileName);
+
         // Upload vers Supabase Storage
-        const result = await uploadFile(file, 'backgrounds');
+        const { data, error } = await supabase.storage
+          .from('backgrounds')
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
         
-        if (!result.success) {
-          alert(`Erreur lors de l'upload: ${result.error}`);
+        if (error) {
+          console.error('❌ Erreur upload:', error);
+          alert(`Erreur lors de l'upload: ${error.message}`);
           isUploading.value = false;
           return;
         }
 
+        // Récupérer l'URL publique
+        const { data: urlData } = supabase.storage
+          .from('backgrounds')
+          .getPublicUrl(fileName);
+
         // Mettre à jour l'annonce avec l'URL Supabase
-        pageSelectionnee.value.media = result.url;
-        pageSelectionnee.value.mediaURL = result.url;
+        pageSelectionnee.value.media = fileName;
+        pageSelectionnee.value.mediaURL = urlData.publicUrl;
         pageSelectionnee.value.mediaType = mediaType;
         pageSelectionnee.value.mediaName = file.name;
         pageSelectionnee.value.mediaSize = file.size;
 
-        console.log('✅ Média uploadé avec succès vers Supabase:', result.url);
+        console.log('✅ Média uploadé avec succès:', urlData.publicUrl);
 
       } catch (error) {
         console.error('❌ Erreur lors de l\'upload:', error);
@@ -174,9 +197,9 @@ export default {
       if (!pageSelectionnee.value) return;
       
       // Supprimer de Supabase
-      if (pageSelectionnee.value.mediaURL) {
+      if (pageSelectionnee.value.media) {
         try {
-          await deleteFile(pageSelectionnee.value.mediaURL, 'backgrounds');
+          await supabase.storage.from('backgrounds').remove([pageSelectionnee.value.media]);
           console.log('✅ Média supprimé de Supabase');
         } catch (error) {
           console.error('❌ Erreur suppression:', error);
@@ -240,33 +263,55 @@ export default {
 </script>
 
 <template>
-  <div class="flex h-screen bg-gray-100">
-    <!-- Panneau latéral gauche -->
-    <div class="w-64 bg-white shadow-lg flex flex-col">
-      <div class="p-4 bg-gray-800 text-white">
-        <h2 class="text-xl font-bold">Pages</h2>
+  <div class="flex flex-row justify-between items-center bg-white p-2 py-4 drop-shadow-xl">
+    <div class="flex flex-row items-center mr-6 p-2">
+      <router-link to="/" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-2 rounded-lg inline-flex items-center">
+        <svg class="w-6 h-6 text-gray-800 dark:text-gray-700" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+          <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m4 12 8-8 8 8M6 10.5V19a1 1 0 0 0 1 1h3v-3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3h3a1 1 0 0 0 1-1v-8.5" />
+        </svg>
+      </router-link>
+      <div class="flex flex-row items-center gap-4">
+        <img src="../assets/icons/ETS.svg" alt="Bdeblogo" class="w-12 ml-6" />
+        <h1 class="text-black font-bold text-2xl">Editeur d'annonces</h1>
       </div>
-      
-      <div class="flex-1 overflow-y-auto p-4">
-        <button @click="ajouterPage" class="w-full mb-4 px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center justify-center transition-colors shadow-md">
-          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-          </svg>
-          Ajouter une page
-        </button>
+    </div>
+  </div>
 
-        <draggable v-model="annonces" item-key="id" handle=".drag-handle" class="space-y-2">
+  <div class="flex h-screen bg-gray-100">
+    <!-- Menu gauche -->
+    <div class="w-80 bg-white shadow-lg p-4 flex flex-col">
+      <button @click="ajouterPage" class="w-full mb-4 py-3 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center justify-center transition-colors">
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+        </svg>
+        Ajouter une page
+      </button>
+
+      <div class="flex-1 overflow-hidden">
+        <draggable v-model="annonces" item-key="id" class="space-y-2 h-full" :animation="200" handle=".drag-handle">
           <template #item="{ element: annonce }">
-            <div @click="pageActive = annonce.id" :class="['p-3 rounded-lg cursor-pointer transition-all', pageActive === annonce.id ? 'bg-blue-500 text-white shadow-lg' : 'bg-gray-200 hover:bg-gray-300']">
+            <div :class="['p-3 rounded-lg cursor-pointer transition-all', pageActive === annonce.id ? 'bg-blue-100 border-2 border-blue-500' : 'bg-gray-50 hover:bg-gray-100']" @click="pageActive = annonce.id">
               <div class="flex items-center justify-between">
-                <div class="flex items-center flex-1 min-w-0 mr-2">
-                  <div class="drag-handle mr-2 flex-shrink-0 cursor-move">
-                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z"></path>
-                    </svg>
-                  </div>
+                <div class="flex items-center flex-1 min-w-0">
+                  <svg class="w-5 h-5 text-gray-400 mr-2 drag-handle cursor-move flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+                  </svg>
+
+                  <svg v-if="!annonce.media" class="w-6 h-6 text-gray-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                  </svg>
+                  <svg v-else-if="annonce.mediaType === 'image'" class="w-6 h-6 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"></path>
+                  </svg>
+                  <svg v-else-if="annonce.mediaType === 'video'" class="w-6 h-6 text-red-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"></path>
+                  </svg>
+                  <svg v-else-if="annonce.mediaType === 'pdf'" class="w-6 h-6 text-blue-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                  </svg>
+
                   <div class="flex-1 min-w-0">
-                    <input v-if="editingPageId === annonce.id" v-model="tempPageName" @blur="finishEditingName(annonce)" @keyup.enter="finishEditingName(annonce)" @keyup.esc="cancelEditingName" type="text" class="w-full px-2 py-1 text-sm bg-white text-black rounded border border-gray-300 focus:outline-none focus:border-blue-500" @click.stop />
+                    <input v-if="editingPageId === annonce.id" v-model="tempPageName" @click.stop @keyup.enter="finishEditingName(annonce)" @keyup.esc="cancelEditingName" @blur="finishEditingName(annonce)" class="w-full px-2 py-1 text-sm font-medium border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" autofocus />
                     <p v-else @dblclick.stop="startEditingName(annonce)" class="font-medium text-sm truncate cursor-text" :title="'Double-cliquez pour renommer'">{{ annonce.nom }}</p>
                     <p v-if="annonce.media" class="text-xs text-gray-500 truncate">{{ annonce.mediaName }}</p>
                   </div>
