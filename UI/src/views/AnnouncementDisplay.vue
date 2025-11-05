@@ -143,85 +143,7 @@ const videoPlayer = ref(null)
 const currentTimer = ref(null)
 const showControls = ref(false)
 const cycleComplet = ref(false)
-let db = null
 
-// 🆕 INDEXEDDB : Initialiser la base de données
-const initDB = () => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('AnnonceMediaDB', 1);
-    
-    request.onerror = () => {
-      console.error('❌ Erreur ouverture IndexedDB');
-      reject(request.error);
-    };
-    
-    request.onsuccess = () => {
-      db = request.result;
-      console.log('✅ IndexedDB initialisée (Announcement)');
-      resolve(db);
-    };
-    
-    request.onupgradeneeded = (event) => {
-      db = event.target.result;
-      if (!db.objectStoreNames.contains('mediaFiles')) {
-        db.createObjectStore('mediaFiles', { keyPath: 'id' });
-      }
-    };
-  });
-};
-
-// 🆕 INDEXEDDB : Récupérer un fichier
-const getFileFromIndexedDB = (id) => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject('Database not initialized');
-      return;
-    }
-    
-    const transaction = db.transaction(['mediaFiles'], 'readonly');
-    const store = transaction.objectStore('mediaFiles');
-    const request = store.get(id);
-    
-    request.onsuccess = () => {
-      if (request.result) {
-        console.log('✅ Fichier récupéré depuis IndexedDB:', id);
-        resolve(request.result.file);
-      } else {
-        console.warn('⚠️ Fichier non trouvé:', id);
-        resolve(null);
-      }
-    };
-    
-    request.onerror = () => {
-      console.error('❌ Erreur récupération IndexedDB');
-      reject(request.error);
-    };
-  });
-};
-
-// 🆕 FONCTION : Charger les médias depuis IndexedDB
-const loadMediaFromIndexedDB = async () => {
-  console.log('🔄 Chargement des médias depuis IndexedDB...');
-  
-  for (const annonce of annonceStore.annonces) {
-    if (annonce.media && !annonce.mediaURL) {
-      try {
-        const file = await getFileFromIndexedDB(annonce.media);
-        if (file) {
-          // Créer un Blob URL pour l'affichage
-          annonce.mediaURL = URL.createObjectURL(file);
-          console.log('✅ Media chargé pour:', annonce.nom);
-        } else {
-          console.warn('⚠️ Média manquant pour:', annonce.nom);
-        }
-      } catch (error) {
-        console.error('❌ Erreur chargement média:', error);
-      }
-    }
-  }
-  
-  console.log('✅ Tous les médias chargés');
-};
 
 // Computed
 const annonceActuelle = computed(() => annonceStore.annonceActuelle)
@@ -245,12 +167,8 @@ const getMediaClass = (mode) => {
 
 // Recharger les annonces depuis localStorage
 const rechargerAnnonces = async () => {
-  console.log('🔄 Rechargement des annonces...')
-  annonceStore.chargerLocal()
-  
-  // Recharger les médias depuis IndexedDB
-  await loadMediaFromIndexedDB()
-  
+  console.log('🔄 Rechargement des annonces depuis Supabase...')
+  await annonceStore.chargerAnnonces()
   console.log('✅ Annonces rechargées')
 }
 
@@ -385,15 +303,8 @@ onMounted(async () => {
   document.body.classList.add('overflow-hidden')
   document.documentElement.classList.add('overflow-hidden')
   
-  // Initialiser IndexedDB
-  await initDB()
-  
-  // Charger les annonces depuis le localStorage
-  annonceStore.chargerLocal()
-  
-  // Charger les médias depuis IndexedDB
-  await loadMediaFromIndexedDB()
-  
+  await annonceStore.chargerAnnonces()
+
   console.log('📊 Annonces chargées:', annonceStore.annonces.length)
   console.log('📊 Annonces valides:', totalAnnonces.value)
   

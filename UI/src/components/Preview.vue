@@ -120,84 +120,6 @@ const videoPlayer = ref(null)
 const currentTimer = ref(null)
 const refreshTimer = ref(null)
 
-let db = null
-
-// 🆕 INDEXEDDB : Initialiser la base de données
-const initDB = () => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('AnnonceMediaDB', 1);
-    
-    request.onerror = () => {
-      console.error('❌ [PREVIEW] Erreur ouverture IndexedDB');
-      reject(request.error);
-    };
-    
-    request.onsuccess = () => {
-      db = request.result;
-      console.log('✅ [PREVIEW] IndexedDB initialisée');
-      resolve(db);
-    };
-    
-    request.onupgradeneeded = (event) => {
-      db = event.target.result;
-      if (!db.objectStoreNames.contains('mediaFiles')) {
-        db.createObjectStore('mediaFiles', { keyPath: 'id' });
-      }
-    };
-  });
-};
-
-// 🆕 INDEXEDDB : Récupérer un fichier
-const getFileFromIndexedDB = (id) => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject('Database not initialized');
-      return;
-    }
-    
-    const transaction = db.transaction(['mediaFiles'], 'readonly');
-    const store = transaction.objectStore('mediaFiles');
-    const request = store.get(id);
-    
-    request.onsuccess = () => {
-      if (request.result) {
-        resolve(request.result.file);
-      } else {
-        console.warn('⚠️ [PREVIEW] Fichier non trouvé:', id);
-        resolve(null);
-      }
-    };
-    
-    request.onerror = () => {
-      console.error('❌ [PREVIEW] Erreur récupération IndexedDB');
-      reject(request.error);
-    };
-  });
-};
-
-// 🆕 FONCTION : Charger les médias depuis IndexedDB
-const loadMediaFromIndexedDB = async (annonces) => {
-  console.log('🔄 [PREVIEW] Chargement des médias depuis IndexedDB...');
-  
-  for (const annonce of annonces) {
-    if (annonce.media && !annonce.mediaURL) {
-      try {
-        const file = await getFileFromIndexedDB(annonce.media);
-        if (file) {
-          annonce.mediaURL = URL.createObjectURL(file);
-          console.log('✅ [PREVIEW] Media chargé pour:', annonce.nom);
-        } else {
-          console.warn('⚠️ [PREVIEW] Média manquant pour:', annonce.nom);
-        }
-      } catch (error) {
-        console.error('❌ [PREVIEW] Erreur chargement média:', error);
-      }
-    }
-  }
-  
-  return annonces;
-};
-
 // Méthodes pour gérer les classes CSS
 const getMediaClass = (mode) => {
   switch(mode) {
@@ -212,45 +134,41 @@ const getMediaClass = (mode) => {
   }
 }
 
-// Charger les annonces depuis localStorage
+// Charger les annonces depuis Supabase
 const loadAnnonces = async () => {
   try {
-    const saved = localStorage.getItem('annonces')
-    if (saved) {
-      const annonces = JSON.parse(saved)
+    // Charger depuis Supabase (qui reconstruit automatiquement les mediaURL)
+    await annonceStore.chargerAnnonces()
+    const annonces = annonceStore.annonces
+    
+    // Filtrer les annonces avec média OU avec linkURL
+    const validAnnonces = annonces.filter(a => 
+      a.media !== null || (a.linkURL && a.linkURL.trim() !== '')
+    )
+    
+    console.log('📊 [PREVIEW] Annonces valides trouvées:', validAnnonces.length)
+    
+    // Si la liste a changé, réinitialiser
+    if (JSON.stringify(validAnnonces.map(a => a.id)) !== JSON.stringify(allAnnonces.value.map(a => a.id))) {
+      console.log('🔄 [PREVIEW] Nouvelles annonces détectées:', validAnnonces.length)
+      allAnnonces.value = validAnnonces
+      totalAnnonces.value = validAnnonces.length
       
-      // 🆕 Charger les médias depuis IndexedDB
-      const annoncesWithMedia = await loadMediaFromIndexedDB(annonces);
+      // Réinitialiser à la première page si nécessaire
+      if (currentPage.value >= validAnnonces.length) {
+        currentPage.value = 0
+      }
       
-      // 🆕 MODIFICATION: Filtrer les annonces avec média OU avec linkURL
-      const validAnnonces = annoncesWithMedia.filter(a => 
-        a.media !== null || (a.linkURL && a.linkURL.trim() !== '')
-      )
-      
-      console.log('📊 [PREVIEW] Annonces valides trouvées:', validAnnonces.length)
-      
-      // Si la liste a changé, réinitialiser
-      if (JSON.stringify(validAnnonces.map(a => a.id)) !== JSON.stringify(allAnnonces.value.map(a => a.id))) {
-        console.log('🔄 [PREVIEW] Nouvelles annonces détectées:', validAnnonces.length)
-        allAnnonces.value = validAnnonces
-        totalAnnonces.value = validAnnonces.length
-        
-        // Réinitialiser à la première page si nécessaire
-        if (currentPage.value >= validAnnonces.length) {
-          currentPage.value = 0
+      // Mettre à jour l'annonce actuelle
+      if (validAnnonces.length > 0) {
+        currentAnnonce.value = validAnnonces[currentPage.value]
+        console.log('✅ [PREVIEW] Annonce actuelle:', currentAnnonce.value.nom)
+        console.log('📄 [PREVIEW] Type:', currentAnnonce.value.mediaType || 'URL Web')
+        if (currentAnnonce.value.linkURL) {
+          console.log('🔗 [PREVIEW] URL:', currentAnnonce.value.linkURL)
         }
-        
-        // Mettre à jour l'annonce actuelle
-        if (validAnnonces.length > 0) {
-          currentAnnonce.value = validAnnonces[currentPage.value]
-          console.log('✅ [PREVIEW] Annonce actuelle:', currentAnnonce.value.nom)
-          console.log('📄 [PREVIEW] Type:', currentAnnonce.value.mediaType || 'URL Web')
-          if (currentAnnonce.value.linkURL) {
-            console.log('🔗 [PREVIEW] URL:', currentAnnonce.value.linkURL)
-          }
-        } else {
-          currentAnnonce.value = null
-        }
+      } else {
+        currentAnnonce.value = null
       }
     }
   } catch (error) {
@@ -327,7 +245,7 @@ onMounted(async () => {
   console.log('🚀 [PREVIEW] Démarrage du preview...')
   
   // 🆕 Initialiser IndexedDB
-  await initDB()
+  await annonceStore.chargerAnnonces()
   
   // Chargement initial
   await loadAnnonces()
