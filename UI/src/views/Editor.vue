@@ -20,7 +20,7 @@ export default {
 
     // Charger les annonces au démarrage
     onMounted(async () => {
-      annonceStore.chargerLocal()
+      await annonceStore.chargerAnnonces()
       
       if (annonceStore.annonces.length > 0) {
         annonces.value = [...annonceStore.annonces]
@@ -48,12 +48,12 @@ export default {
     ]);
 
     // Synchroniser avec le store
-    watch(annonces, (newAnnonces) => {
+    watch(annonces, async (newAnnonces) => {
       const annoncesToSave = newAnnonces.map(a => {
         const { mediaURL, ...rest } = a
         return rest
       })
-      annonceStore.sauvegarderAnnonces(annoncesToSave)
+      await annonceStore.sauvegarderAnnonces(annoncesToSave)
     }, { deep: true })
 
     const pageSelectionnee = computed(() => {
@@ -272,7 +272,7 @@ export default {
       </router-link>
       <div class="flex flex-row items-center gap-4">
         <img src="../assets/icons/ETS.svg" alt="Bdeblogo" class="w-12 ml-6" />
-        <h1 class="text-black font-bold text-2xl">Editeur d'annonces</h1>
+        <h1 class="text-black font-bold text-2xl">Éditeur d'annonces</h1>
       </div>
     </div>
   </div>

@@ -1,136 +1,145 @@
-// stores/annonceStore.js
 import { defineStore } from 'pinia'
+import { supabase } from '../lib/supabaseClient.js'
 
 export const useAnnonceStore = defineStore('annonce', {
   state: () => ({
-    // Liste des annonces/pages créées dans l'éditeur
-    annonces: [
-      {
-        id: 1,
-        nom: "Page 1",
-        media: null,
-        mediaURL: null,
-        mediaType: null,
-        mediaName: null,
-        mediaSize: null,
-        linkURL: "",
-        dureeDebut: "",
-        dureeFin: "",
-        dureeAffichage: 5,
-        transition: "fade",
-        modeAffichage: "cover",
-        loop: false,
-      }
-    ],
-    // Index de la page actuellement affichée
+    annonces: [],
     pageActuelle: 0,
-    // État de lecture
     isPlaying: false,
     isPaused: false
   }),
 
   getters: {
-    // 🆕 MODIFICATION: Inclure les annonces avec média OU avec linkURL
-    annoncesValides: (state) => {
-      return state.annonces.filter(a => a.media !== null || (a.linkURL && a.linkURL.trim() !== ''))
-    },
-    
-    // 🆕 MODIFICATION: Retourner l'annonce actuelle parmi les annonces valides
-    annonceActuelle: (state) => {
-      const annoncesValides = state.annonces.filter(a => a.media !== null || (a.linkURL && a.linkURL.trim() !== ''))
-      if (annoncesValides.length === 0) return null
-      return annoncesValides[state.pageActuelle % annoncesValides.length]
-    },
-    
-    // 🆕 MODIFICATION: Compter les annonces avec média OU avec linkURL
-    totalAnnonces: (state) => {
-      return state.annonces.filter(a => a.media !== null || (a.linkURL && a.linkURL.trim() !== '')).length
-    }
+    annonceActive: (state) => state.annonces[state.pageActuelle] || null,
+    hasAnnonces: (state) => state.annonces.length > 0
   },
 
   actions: {
-    // Ajouter une nouvelle annonce
-    ajouterAnnonce(annonce) {
-      this.annonces.push(annonce)
-    },
-    
-    // Mettre à jour une annonce existante
-    mettreAJourAnnonce(id, data) {
-      const index = this.annonces.findIndex(a => a.id === id)
-      if (index !== -1) {
-        this.annonces[index] = { ...this.annonces[index], ...data }
+    // 📤 NOUVELLE FONCTION : Sauvegarder les annonces dans Supabase
+    async sauvegarderAnnonces(annonces) {
+      try {
+        console.log('💾 Sauvegarde des annonces dans Supabase...')
+        
+        // Convertir en JSON
+        const jsonData = JSON.stringify(annonces, null, 2)
+        const blob = new Blob([jsonData], { type: 'application/json' })
+        
+        // Supprimer l'ancien fichier s'il existe
+        await supabase.storage
+          .from('backgrounds')
+          .remove(['annonces.json'])
+        
+        // Upload le nouveau fichier
+        const { data, error } = await supabase.storage
+          .from('backgrounds')
+          .upload('annonces.json', blob, {
+            cacheControl: '0', // Pas de cache pour avoir toujours la dernière version
+            upsert: true
+          })
+        
+        if (error) {
+          console.error('❌ Erreur sauvegarde Supabase:', error)
+          // Fallback sur localStorage en cas d'erreur
+          localStorage.setItem('annonces', JSON.stringify(annonces))
+          return false
+        }
+        
+        console.log('✅ Annonces sauvegardées dans Supabase!')
+        this.annonces = annonces
+        
+        // Sauvegarder aussi en local comme backup
+        localStorage.setItem('annonces', JSON.stringify(annonces))
+        return true
+        
+      } catch (err) {
+        console.error('❌ Erreur inattendue:', err)
+        // Fallback sur localStorage
+        localStorage.setItem('annonces', JSON.stringify(annonces))
+        return false
       }
     },
-    
-    // Supprimer une annonce
-    supprimerAnnonce(id) {
-      const index = this.annonces.findIndex(a => a.id === id)
-      if (index !== -1) {
-        this.annonces.splice(index, 1)
+
+    // 📥 NOUVELLE FONCTION : Charger les annonces depuis Supabase
+    async chargerAnnonces() {
+      try {
+        console.log('📥 Chargement des annonces depuis Supabase...')
+        
+        // Télécharger le fichier depuis Supabase
+        const { data, error } = await supabase.storage
+          .from('backgrounds')
+          .download('annonces.json')
+        
+        if (error) {
+          console.warn('⚠️ Fichier annonces.json non trouvé dans Supabase, chargement local...')
+          // Fallback sur localStorage
+          return this.chargerLocal()
+        }
+        
+        // Lire le contenu du fichier
+        const text = await data.text()
+        const annonces = JSON.parse(text)
+        
+        this.annonces = annonces
+        console.log('✅ Annonces chargées depuis Supabase:', annonces.length, 'pages')
+        
+        // Sauvegarder en local comme backup
+        localStorage.setItem('annonces', JSON.stringify(annonces))
+        return true
+        
+      } catch (err) {
+        console.error('❌ Erreur chargement Supabase:', err)
+        // Fallback sur localStorage
+        return this.chargerLocal()
       }
     },
-    
-    // Remplacer toute la liste des annonces
-    setAnnonces(annonces) {
-      this.annonces = annonces
-    },
-    
-    // 🆕 MODIFICATION: Navigation avec les annonces valides
-    pageSuivante() {
-      const annoncesValides = this.annonces.filter(a => a.media !== null || (a.linkURL && a.linkURL.trim() !== ''))
-      if (annoncesValides.length > 0) {
-        this.pageActuelle = (this.pageActuelle + 1) % annoncesValides.length
-      }
-    },
-    
-    // Aller à une page spécifique
-    allerALaPage(index) {
-      const annoncesValides = this.annonces.filter(a => a.media !== null || (a.linkURL && a.linkURL.trim() !== ''))
-      if (index >= 0 && index < annoncesValides.length) {
-        this.pageActuelle = index
-      }
-    },
-    
-    // Démarrer la lecture automatique
-    demarrerLecture() {
-      this.isPlaying = true
-      this.isPaused = false
-    },
-    
-    // Mettre en pause
-    pauseLecture() {
-      this.isPaused = true
-    },
-    
-    // Reprendre la lecture
-    reprendreLecture() {
-      this.isPaused = false
-    },
-    
-    // Arrêter la lecture
-    arreterLecture() {
-      this.isPlaying = false
-      this.isPaused = false
-      this.pageActuelle = 0
-    },
-    
-    // Sauvegarder dans localStorage
-    sauvegarderLocal() {
-      localStorage.setItem('annonces', JSON.stringify(this.annonces))
-      console.log('💾 Annonces sauvegardées:', this.annonces.length)
-    },
-    
-    // Charger depuis localStorage
+
+    // 📂 Charger depuis localStorage (fallback)
     chargerLocal() {
       const saved = localStorage.getItem('annonces')
       if (saved) {
         try {
           this.annonces = JSON.parse(saved)
-          console.log('📥 Annonces chargées:', this.annonces.length)
+          console.log('✅ Annonces chargées depuis localStorage')
+          return true
         } catch (e) {
-          console.error('❌ Erreur lors du chargement des annonces:', e)
+          console.error('❌ Erreur chargement localStorage:', e)
+          return false
         }
       }
+      return false
+    },
+
+    // Navigation
+    pageSuivante() {
+      if (this.annonces.length > 0) {
+        this.pageActuelle = (this.pageActuelle + 1) % this.annonces.length
+      }
+    },
+
+    allerALaPage(index) {
+      if (index >= 0 && index < this.annonces.length) {
+        this.pageActuelle = index
+      }
+    },
+
+    // Lecture
+    demarrerLecture() {
+      this.isPlaying = true
+      this.isPaused = false
+    },
+
+    pauseLecture() {
+      this.isPaused = true
+    },
+
+    reprendreLecture() {
+      this.isPaused = false
+    },
+
+    arreterLecture() {
+      this.isPlaying = false
+      this.isPaused = false
+      this.pageActuelle = 0
     }
   }
 })
