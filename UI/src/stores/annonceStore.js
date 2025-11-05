@@ -11,6 +11,7 @@ export const useAnnonceStore = defineStore('annonce', {
 
   getters: {
     annonceActive: (state) => state.annonces[state.pageActuelle] || null,
+    annonceActuelle: (state) => state.annonces[state.pageActuelle] || null, // Alias pour compatibilité
     hasAnnonces: (state) => state.annonces.length > 0,
     totalAnnonces: (state) => state.annonces.length
   },

@@ -110,6 +110,11 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 
+import { useAnnonceStore } from '../stores/annonceStore.js'
+
+// Store Pinia
+const annonceStore = useAnnonceStore()
+
 // État local du Preview
 const allAnnonces = ref([])
 const currentPage = ref(0)
