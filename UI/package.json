@@ -19,6 +19,7 @@
     "@tailwindcss/vite": "^4.1.11",
     "axios": "^1.10.0",
     "crossenv": "^0.0.2-security",
+    "jszip": "^3.10.1",
     "lucide-vue-next": "^0.536.0",
     "motion-v": "^1.5.0",
     "pinia": "^3.0.3",

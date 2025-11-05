@@ -6,6 +6,7 @@ import { Linkedin } from "lucide-vue-next";
 import { Github } from "lucide-vue-next";
 import { useUpdateStore } from "../composables/useUpdateStore.js";
 import { uploadFile, getLastGTFSUpdate } from "../lib/supabaseStorage.js";
+import JSZip from "jszip";
 
 const tabs = [
   { id: "gtfs", label: "GTFS" },
@@ -87,6 +88,7 @@ function scheduleNextUpdate() {
 }
 
 // Fonction pour uploader GTFS vers Supabase
+// NOUVELLE VERSION: Extrait seulement les 3 fichiers nécessaires
 async function uploadGTFS(transport, file) {
   if (!file) return;
   
@@ -102,26 +104,64 @@ async function uploadGTFS(transport, file) {
   uploadingRef.value = true;
   
   try {
-    console.log(`📤 Upload du fichier GTFS ${transport.toUpperCase()}...`);
+    console.log(`📤 Extraction du fichier GTFS ${transport.toUpperCase()}...`);
     
-    // Upload vers Supabase Storage dans le bucket gtfs-files
-    const result = await uploadFile(file, 'gtfs-files', transport);
+    // 1. Lire le fichier ZIP
+    const zip = await JSZip.loadAsync(file);
     
-    if (!result.success) {
-      alert(`Erreur lors de l'upload: ${result.error}`);
-      console.error('❌ Erreur upload GTFS:', result.error);
+    // 2. Extraire seulement les 3 fichiers nécessaires
+    const requiredFiles = ['routes.txt', 'trips.txt', 'stop_times.txt'];
+    const missingFiles = [];
+    
+    for (const fileName of requiredFiles) {
+      if (!zip.file(fileName)) {
+        missingFiles.push(fileName);
+      }
+    }
+    
+    if (missingFiles.length > 0) {
+      alert(`❌ Fichiers manquants dans le ZIP: ${missingFiles.join(', ')}`);
+      uploadingRef.value = false;
       return;
     }
     
-    console.log(`✅ Fichier GTFS ${transport.toUpperCase()} uploadé avec succès:`, result.url);
-    alert(`✅ Fichier GTFS ${transport.toUpperCase()} uploadé avec succès!`);
+    console.log('✅ Tous les fichiers nécessaires sont présents');
+    
+    // 3. Upload chaque fichier individuellement
+    let uploadCount = 0;
+    
+    for (const fileName of requiredFiles) {
+      console.log(`📤 Upload de ${fileName}...`);
+      
+      // Extraire le contenu du fichier
+      const content = await zip.file(fileName).async("blob");
+      
+      // Créer un objet File pour l'upload
+      const txtFile = new File([content], fileName, { type: 'text/plain' });
+      
+      // Upload vers Supabase dans le dossier stm/ ou exo/
+      const result = await uploadFile(txtFile, 'gtfs-files', transport);
+      
+      if (!result.success) {
+        alert(`❌ Erreur lors de l'upload de ${fileName}: ${result.error}`);
+        console.error(`❌ Erreur upload ${fileName}:`, result.error);
+        uploadingRef.value = false;
+        return;
+      }
+      
+      uploadCount++;
+      console.log(`✅ ${fileName} uploadé avec succès (${uploadCount}/${requiredFiles.length})`);
+    }
+    
+    console.log(`✅ Tous les fichiers GTFS ${transport.toUpperCase()} uploadés avec succès!`);
+    alert(`✅ ${uploadCount} fichiers GTFS ${transport.toUpperCase()} uploadés avec succès!\n(routes.txt, trips.txt, stop_times.txt)`);
     
     // Rafraîchir les dates de dernière mise à jour
     await fetchLastUpdates();
     
   } catch (error) {
-    console.error('❌ Erreur lors de l\'upload GTFS:', error);
-    alert(`Une erreur s'est produite lors de l'upload: ${error.message}`);
+    console.error('❌ Erreur lors du traitement GTFS:', error);
+    alert(`Une erreur s'est produite: ${error.message}`);
   } finally {
     uploadingRef.value = false;
   }
@@ -296,6 +336,13 @@ function getCurrentUpdateState() {
                 </a>
               </li>
             </ul>
+            <div class="bg-blue-100 border-l-4 border-blue-500 p-4 mt-4">
+              <p class="text-sm text-blue-700">
+                ℹ️ <strong>Note:</strong> Seuls les fichiers <code class="bg-blue-200 px-1 rounded">routes.txt</code>, 
+                <code class="bg-blue-200 px-1 rounded">trips.txt</code> et 
+                <code class="bg-blue-200 px-1 rounded">stop_times.txt</code> sont extraits du ZIP et uploadés.
+              </p>
+            </div>
           </div>
           
           <!-- Section STM -->
@@ -328,7 +375,7 @@ function getCurrentUpdateState() {
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  {{ isUploadingSTM ? 'Upload en cours...' : 'Importer' }}
+                  {{ isUploadingSTM ? 'Extraction & Upload...' : 'Importer' }}
                 </button>
               </div>
               
