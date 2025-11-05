@@ -11,11 +11,12 @@ export const useAnnonceStore = defineStore('annonce', {
 
   getters: {
     annonceActive: (state) => state.annonces[state.pageActuelle] || null,
-    hasAnnonces: (state) => state.annonces.length > 0
+    hasAnnonces: (state) => state.annonces.length > 0,
+    totalAnnonces: (state) => state.annonces.length
   },
 
   actions: {
-    // 📤 NOUVELLE FONCTION : Sauvegarder les annonces dans Supabase
+    // 📤 Sauvegarder les annonces dans Supabase
     async sauvegarderAnnonces(annonces) {
       try {
         console.log('💾 Sauvegarde des annonces dans Supabase...')
@@ -25,15 +26,19 @@ export const useAnnonceStore = defineStore('annonce', {
         const blob = new Blob([jsonData], { type: 'application/json' })
         
         // Supprimer l'ancien fichier s'il existe
-        await supabase.storage
+        const { error: removeError } = await supabase.storage
           .from('backgrounds')
           .remove(['annonces.json'])
+        
+        if (removeError) {
+          console.log('⚠️ Pas de fichier précédent à supprimer')
+        }
         
         // Upload le nouveau fichier
         const { data, error } = await supabase.storage
           .from('backgrounds')
           .upload('annonces.json', blob, {
-            cacheControl: '0', // Pas de cache pour avoir toujours la dernière version
+            cacheControl: '0', // Pas de cache
             upsert: true
           })
         
@@ -44,7 +49,7 @@ export const useAnnonceStore = defineStore('annonce', {
           return false
         }
         
-        console.log('✅ Annonces sauvegardées dans Supabase!')
+        console.log('✅ Annonces sauvegardées dans Supabase!', data)
         this.annonces = annonces
         
         // Sauvegarder aussi en local comme backup
@@ -59,25 +64,41 @@ export const useAnnonceStore = defineStore('annonce', {
       }
     },
 
-    // 📥 NOUVELLE FONCTION : Charger les annonces depuis Supabase
+    // 📥 Charger les annonces depuis Supabase
     async chargerAnnonces() {
       try {
         console.log('📥 Chargement des annonces depuis Supabase...')
         
-        // Télécharger le fichier depuis Supabase
+        // Ajouter un timestamp pour forcer le bypass du cache
+        const timestamp = Date.now()
+        
+        // Télécharger le fichier depuis Supabase avec bypass du cache
         const { data, error } = await supabase.storage
           .from('backgrounds')
-          .download('annonces.json')
+          .download(`annonces.json?t=${timestamp}`)
         
         if (error) {
-          console.warn('⚠️ Fichier annonces.json non trouvé dans Supabase, chargement local...')
+          console.warn('⚠️ Fichier annonces.json non trouvé dans Supabase:', error.message)
+          console.log('🔄 Tentative de chargement depuis localStorage...')
           // Fallback sur localStorage
+          return this.chargerLocal()
+        }
+        
+        if (!data) {
+          console.warn('⚠️ Pas de données reçues de Supabase')
           return this.chargerLocal()
         }
         
         // Lire le contenu du fichier
         const text = await data.text()
+        
+        if (!text || text.trim() === '') {
+          console.warn('⚠️ Fichier vide dans Supabase')
+          return this.chargerLocal()
+        }
+        
         const annonces = JSON.parse(text)
+        console.log('📄 Annonces brutes chargées:', annonces.length)
         
         // 🔧 IMPORTANT : Reconstruire les mediaURL pour chaque annonce
         annonces.forEach(annonce => {
@@ -101,6 +122,7 @@ export const useAnnonceStore = defineStore('annonce', {
         
       } catch (err) {
         console.error('❌ Erreur chargement Supabase:', err)
+        console.log('🔄 Fallback sur localStorage')
         // Fallback sur localStorage
         return this.chargerLocal()
       }
@@ -112,6 +134,7 @@ export const useAnnonceStore = defineStore('annonce', {
       if (saved) {
         try {
           const annonces = JSON.parse(saved)
+          console.log('📄 Annonces depuis localStorage:', annonces.length)
           
           // 🔧 Reconstruire les mediaURL pour chaque annonce
           annonces.forEach(annonce => {
@@ -121,6 +144,7 @@ export const useAnnonceStore = defineStore('annonce', {
                 .getPublicUrl(annonce.media)
               
               annonce.mediaURL = urlData.publicUrl
+              console.log('🔗 URL reconstruite (local):', annonce.nom)
             }
           })
           
@@ -132,6 +156,7 @@ export const useAnnonceStore = defineStore('annonce', {
           return false
         }
       }
+      console.warn('⚠️ Aucune annonce dans localStorage')
       return false
     },
 
