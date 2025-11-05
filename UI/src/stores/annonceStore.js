@@ -79,6 +79,19 @@ export const useAnnonceStore = defineStore('annonce', {
         const text = await data.text()
         const annonces = JSON.parse(text)
         
+        // 🔧 IMPORTANT : Reconstruire les mediaURL pour chaque annonce
+        annonces.forEach(annonce => {
+          if (annonce.media) {
+            // Reconstruire l'URL publique depuis le nom du fichier
+            const { data: urlData } = supabase.storage
+              .from('backgrounds')
+              .getPublicUrl(annonce.media)
+            
+            annonce.mediaURL = urlData.publicUrl
+            console.log('🔗 URL reconstruite:', annonce.nom, '→', urlData.publicUrl)
+          }
+        })
+        
         this.annonces = annonces
         console.log('✅ Annonces chargées depuis Supabase:', annonces.length, 'pages')
         
@@ -98,7 +111,20 @@ export const useAnnonceStore = defineStore('annonce', {
       const saved = localStorage.getItem('annonces')
       if (saved) {
         try {
-          this.annonces = JSON.parse(saved)
+          const annonces = JSON.parse(saved)
+          
+          // 🔧 Reconstruire les mediaURL pour chaque annonce
+          annonces.forEach(annonce => {
+            if (annonce.media) {
+              const { data: urlData } = supabase.storage
+                .from('backgrounds')
+                .getPublicUrl(annonce.media)
+              
+              annonce.mediaURL = urlData.publicUrl
+            }
+          })
+          
+          this.annonces = annonces
           console.log('✅ Annonces chargées depuis localStorage')
           return true
         } catch (e) {
