@@ -1,3 +1,8 @@
-export const API_BASE_URL = import.meta.env.PROD 
-  ? 'https://etsignage-backend.onrender.com'  
-  : '';
+const isLocalhost = window.location.hostname === 'localhost' || 
+                    window.location.hostname === '127.0.0.1'
+
+export const API_URL = isLocalhost
+  ? 'https://etsignage-backend-dev.onrender.com'
+  : 'https://etsignage-backend.onrender.com'
+
+console.log('🔧 Using API:', API_URL)
