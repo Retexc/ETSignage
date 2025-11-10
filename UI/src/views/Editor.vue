@@ -271,7 +271,7 @@ export default {
         </svg>
       </router-link>
       <div class="flex flex-row items-center gap-4">
-        <img src="../assets/icons/ETS.svg" alt="Bdeblogo" class="w-12 ml-6" />
+        <img src="../assets/icons/etsflux.svg" alt="ETSFlux logo" class="w-28 ml-6 -mb-4" />
         <h1 class="text-black font-bold text-2xl">Éditeur d'annonces</h1>
       </div>
     </div>

@@ -3,9 +3,12 @@ import { useRouter } from "vue-router";
 import { onMounted, onUnmounted } from "vue";
 import { useUpdateStore } from "../composables/useUpdateStore.js";
 import LogoutButton from "./LogoutButton.vue";
+import FluxLogo from "../assets/icons/etsflux.svg";
+import FluxDevLogo from "../assets/icons/etsflux-dev.svg";
 
 const router = useRouter();
 const { updateState, checkForUpdates, clearNotification } = useUpdateStore();
+const logo = import.meta.env.MODE === 'development' ? FluxDevLogo : FluxLogo;
 
 function logout() {
   // clear session/cookie, then:
@@ -33,6 +36,11 @@ function navigateToSettings() {
   clearNotification();
   router.push("/settings");
 }
+
+if (import.meta.env.MODE === 'development') {
+  
+}
+
 </script>
 
 <template>
@@ -42,8 +50,8 @@ function navigateToSettings() {
       <div class="py-4 px-6">
         <a href="/">
           <img
-            src="../assets/icons/etsignage.svg"
-            alt="Bdeblogo"
+            :src=logo
+            alt="ETSFlux logo"
             class="w-40 mb-2 mt-8 -ml-1"
           />
         </a>

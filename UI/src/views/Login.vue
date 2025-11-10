@@ -4,6 +4,8 @@ import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/authStore";
 import { motion } from "motion-v";
 import bgImg from "../assets/images/Login_bg.jpg";
+import FluxLogo from "../assets/icons/etsflux.svg";
+import FluxDevLogo from "../assets/icons/etsflux-dev.svg";
 
 // 🎯 Initialisation
 const router = useRouter();
@@ -14,6 +16,8 @@ const email = ref("");
 const password = ref("");
 const loading = ref(false);
 const error = ref(null);
+
+const logo = import.meta.env.MODE === 'development' ? FluxDevLogo : FluxLogo;
 
 // 🔐 FONCTION DE CONNEXION
 async function onSubmit() {
@@ -63,7 +67,7 @@ async function onSubmit() {
   >
     <div class="flex items-center justify-start h-screen">
       <!-- WHITE CARD -->
-      <div class="bg-[#ffffff] w-2/5 h-full p-8 overflow-hidden flex flex-col">
+      <div class="bg-[#ffffff] w-2/5 h-full p-8 px-18 overflow-hidden flex flex-col">
         <motion.div
           :initial="{ opacity: 0, y: 20, filter: 'blur(10px)' }"
           :animate="{
@@ -83,19 +87,14 @@ async function onSubmit() {
             filter: 'blur(0px)',
             transition: { delay: 0.5, duration: 1 },
           }"
-          class="flex py-32 px-12 flex-col items-center justify-center space-y-6 w-full text-left"
+          class="flex flex-col items-center justify-center space-y-6 w-full text-left mt-50"
         >
           <img
-            src="../assets/icons/ETS.svg"
+            :src=logo
             alt="ETS Logo"
-            class="w-18 self-start mt-2 mb-8 drop-shadow-2xl"
+            class=" w-54 self-start mt-2 mb-8 drop-shadow-2xl -ml-2"
           />
 
-          <img
-            src="../assets/icons/Signage.svg"
-            alt="Signage Logo"
-            class="w-40 self-start mt-2 drop-shadow-2xl"
-          />
 
           <!-- 🚨 MESSAGE D'ERREUR -->
           <div
