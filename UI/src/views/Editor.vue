@@ -387,9 +387,8 @@ export default {
           </div>
 
           <div class="text-center border-t pt-4">
-            <p class="text-sm text-gray-600 font-medium">Formats acceptés : Images (JPG, PNG, GIF), Vidéos (MP4, WebM), PDF</p>
+            <p class="text-sm text-gray-600 font-medium">Formats acceptés : Images (JPG, PNG, GIF), Vidéos (MP4, WebM)</p>
             <p class="text-xs text-gray-500 mt-1">Taille maximale : 500 MB</p>
-            <p class="text-xs text-green-600 mt-1 font-semibold">✅ Les fichiers sont sauvegardés dans Supabase (disponibles partout)</p>
           </div>
         </div>
       </div>
