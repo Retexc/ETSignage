@@ -271,7 +271,7 @@ export default {
         </svg>
       </router-link>
       <div class="flex flex-row items-center gap-4">
-        <img src="../assets/icons/ETS.svg" alt="Bdeblogo" class="w-12 ml-6" />
+        <img src="../assets/icons/etsflux.svg" alt="ETSFlux logo" class="w-28 ml-6 -mb-4" />
         <h1 class="text-black font-bold text-2xl">Éditeur d'annonces</h1>
       </div>
     </div>
@@ -387,9 +387,8 @@ export default {
           </div>
 
           <div class="text-center border-t pt-4">
-            <p class="text-sm text-gray-600 font-medium">Formats acceptés : Images (JPG, PNG, GIF), Vidéos (MP4, WebM), PDF</p>
+            <p class="text-sm text-gray-600 font-medium">Formats acceptés : Images (JPG, PNG, GIF), Vidéos (MP4, WebM)</p>
             <p class="text-xs text-gray-500 mt-1">Taille maximale : 500 MB</p>
-            <p class="text-xs text-green-600 mt-1 font-semibold">✅ Les fichiers sont sauvegardés dans Supabase (disponibles partout)</p>
           </div>
         </div>
       </div>

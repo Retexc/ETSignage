@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from "vue";
+import { API_URL } from '../config.js'
 
 const currentDate = ref('');
 const currentTime = ref('');
@@ -34,22 +35,20 @@ const updateDate = () => {
 
 const fetchWeatherData = async () => {
   try {
-    const response = await fetch('/api/data');
+    const response = await fetch(`${API_URL}/api/data`);
     const data = await response.json();
     
-    // Update weather data from API response
     if (data.weather) {
       weather.value = {
         icon: data.weather.icon || '',
         text: data.weather.text || '',
-        temp: data.weather.temp || ''
+        temp: data.weather.temp !== undefined ? data.weather.temp : '' 
       };
     }
   } catch (error) {
     console.error('Error fetching weather data:', error);
   }
 };
-
 onMounted(() => {
   updateDate();
   timeInterval = setInterval(updateDate, 60000); 

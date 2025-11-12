@@ -104,15 +104,9 @@ def get_weather():
 # Metro Alerts Processing Functions
 # ====================================================================
 def process_metro_alerts():
-    """
-    Fetch and process metro line alerts from STM API.
-    Returns a list of metro lines with simplified status display.
-    
-    FIXED: Now properly detects:
-    - Network-wide alerts (strikes) via agency_id == "STM"
-    - Individual line alerts via route_short_name
-    - Individual line alerts via route_id
-    """
+    if os.environ.get('ENVIRONMENT') == 'development':
+        from backend.mock_stm_data import get_mock_metro_lines
+        return get_mock_metro_lines()
     try:
         # Fetch all STM alerts
         alerts_data = fetch_stm_alerts()
@@ -387,8 +381,11 @@ def get_data():
         # ========== STM BUSES WITH OCCUPANCY ==========
         buses = []
         try:
-            # Get the bus routes from config
-            from .config import BUS_ROUTES
+            if os.environ.get('ENVIRONMENT') == 'development':
+                from backend.mock_stm_data import get_mock_processed_buses
+                buses = get_mock_processed_buses()
+            else:
+                from .config import BUS_ROUTES
             
             stm_trip_entities = fetch_stm_realtime_data()
             positions_dict = fetch_stm_positions_dict(BUS_ROUTES, stm_trips)
