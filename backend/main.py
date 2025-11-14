@@ -48,6 +48,56 @@ STM_DIR = os.path.join(GTFS_BASE, "stm")
 
 os.makedirs(STM_DIR, exist_ok=True)
 
+# ─── Download GTFS files from Supabase on startup (production only) ────────
+if os.environ.get('ENVIRONMENT') != 'development':
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+    
+    if SUPABASE_URL and SUPABASE_KEY:
+        try:
+            print("📥 Downloading GTFS files from Supabase...")
+            from supabase import create_client
+            
+            supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+            
+            # List files in the stm folder
+            result = supabase.storage.from_("gtfs-files").list("stm")
+            
+            if result:
+                files_to_download = ["routes.txt", "trips.txt", "stop_times.txt"]
+                
+                for filename in files_to_download:
+                    # Find the most recent version of this file
+                    matching_files = [f for f in result if f["name"].endswith(filename)]
+                    
+                    if matching_files:
+                        # Sort by created_at to get most recent
+                        matching_files.sort(key=lambda x: x["created_at"], reverse=True)
+                        latest_file = matching_files[0]
+                        
+                        # Download the file
+                        file_path_in_bucket = f"stm/{latest_file['name']}"
+                        local_file_path = os.path.join(STM_DIR, filename)
+                        
+                        print(f"   Downloading {filename}...")
+                        data = supabase.storage.from_("gtfs-files").download(file_path_in_bucket)
+                        
+                        with open(local_file_path, "wb") as f:
+                            f.write(data)
+                        
+                        file_size = len(data) / 1024
+                        print(f"   ✅ {filename} downloaded ({file_size:.1f} KB)")
+                
+                print("✅ GTFS files downloaded from Supabase!")
+            else:
+                print("⚠️  No GTFS files found in Supabase")
+                
+        except Exception as e:
+            print(f"⚠️  Error downloading GTFS from Supabase: {e}")
+            print("   Continuing with local files if available...")
+    else:
+        print("⚠️  Supabase credentials not set, skipping cloud download")
+
 # ─── check for required GTFS files ────────────────────────────
 required_stm = ["routes.txt", "trips.txt", "stop_times.txt"]
 
