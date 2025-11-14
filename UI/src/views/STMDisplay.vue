@@ -5,6 +5,7 @@ import MetroRow from "../components/MetroRow.vue";
 import STMLogo from "../assets/icons/STM.png";
 import Background from "../assets/images/Login_bg.jpg"
 import AlertBanner from "../components/AlertBanner.vue";
+import { API_URL } from '../config.js'
 
 // Data from the API
 const buses = ref([]);
@@ -37,7 +38,7 @@ const sortedBuses = computed(() => {
 // Function to fetch data from the backend
 const fetchData = async () => {
   try {
-    const response = await fetch("http://localhost:5000/api/data");
+    const response = await fetch(`${API_URL}/api/data`);
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);

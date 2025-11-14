@@ -19,6 +19,10 @@ from backend.utils import load_csv_dict
 _calendar_data = None
 _calendar_dates_data = None
 
+IS_DEV_MODE = os.environ.get('ENVIRONMENT') == 'development'
+
+
+
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
 def load_calendar_data():
@@ -93,6 +97,10 @@ def serviceRunsToday(service_id):
     return run_today
 
 def fetch_stm_realtime_data():
+
+    if IS_DEV_MODE:
+        from backend.mock_stm_data import get_mock_trip_entities
+        return get_mock_trip_entities()
     headers = {
         "accept": "application/x-protobuf",
         "apiKey": STM_API_KEY,
@@ -108,6 +116,9 @@ def fetch_stm_realtime_data():
         return []
     
 def fetch_stm_vehicle_positions():
+    if IS_DEV_MODE:
+        from backend.mock_stm_data import get_mock_vehicle_positions
+        return get_mock_vehicle_positions()
     headers = {
         "accept": "application/x-protobuf",
         "apiKey": STM_API_KEY,
@@ -131,16 +142,12 @@ _stm_alerts_cache = {
 STM_ALERTS_CACHE_TTL = 30  # Cache alerts for 30 seconds
 
 def fetch_stm_alerts():
-    """
-    Fetch alerts from STM API and normalize to consistent format.
-    Uses caching to avoid hitting rate limits (10 req/sec, 10k req/day).
-    Returns JSON data with alerts in standardized format with:
-    - informed_entities (list)
-    - header_texts (list with language/text dicts)
-    - description_texts (list with language/text dicts)
-    """
-    global _stm_alerts_cache
+    if IS_DEV_MODE:
+        from backend.mock_stm_data import get_mock_alerts
+        return get_mock_alerts()
     
+    global _stm_alerts_cache
+
     # Check if cache is still valid
     current_time = time.time()
     if current_time - _stm_alerts_cache["timestamp"] < STM_ALERTS_CACHE_TTL:

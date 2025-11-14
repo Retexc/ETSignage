@@ -10,7 +10,6 @@ import JSZip from "jszip";
 
 const tabs = [
   { id: "gtfs", label: "GTFS" },
-  { id: "update", label: "Mise à jour" },
   { id: "about", label: "À propos" },
 ];
 const active = ref("gtfs");
@@ -479,97 +478,6 @@ function getCurrentUpdateState() {
           </div>
         </motion.div>
         
-        <motion.div
-        v-else-if="active === 'update'"
-        :key="'update_tab'"
-        :initial="{ opacity: 0, y: 20 }"
-        :animate="{ opacity: 1, y: 0, transition: { duration: 0.3 } }"  
-        >
-          <div
-            class="bg-gray-300 rounded-lg p-6 mb-6 text-black space-y-4 flex flex-row items-center justify-between"
-          >
-            <div class="flex flex-row items-center gap-2 mb-0">
-              <img
-                :src="icons[getCurrentUpdateState()] ?? icons.idle"
-                alt="status"
-                class="h-18 self-start"
-              />
-
-              <div class="flex flex-col">
-                <h3 class="text-2xl font-bold">
-                  <template v-if="updateState.available">
-                    Mise à jour disponible
-                  </template>
-                  <template v-else-if="getCurrentUpdateState() === 'up_to_date'">
-                    Tout est à jour !
-                  </template>
-                  <template v-else-if="updateState.checking">
-                    Vérification en cours...
-                  </template>
-                  <template v-else-if="getCurrentUpdateState() === 'error'">
-                    Erreur
-                  </template>
-                  <template v-else>Statut inconnu</template>
-                </h3>
-                <p class="text-xl text-black">
-                  Dernière vérification : {{ updateState.lastChecked }}
-                  <span v-if="updateState.available">
-                    (nouvelle version disponible)
-                  </span>
-                  <span v-if="getCurrentUpdateState() === 'error' && updateState.message">
-                    - {{ updateState.message }}
-                  </span>
-                </p>
-              </div>
-            </div>
-            <div>
-              <button
-                v-if="!updateState.checking && !updateState.available"
-                @click="checkForUpdates"
-                class="inline-flex items-center px-4 py-2 bg-blue-400 text-black rounded-lg hover:bg-blue-500 font-bold"
-              >
-                Rechercher des mises à jour
-              </button>
-              <button
-                v-else-if="updateState.available && !updateState.checking"
-                @click="performUpdate"
-                class="inline-flex items-center px-4 py-2 bg-blue-400 text-black rounded-lg hover:bg-blue-500 font-bold"
-              >
-                Mettre à jour
-              </button>
-              <button
-                v-else-if="updateState.checking"
-                disabled
-                class="inline-flex items-center px-4 py-2 bg-blue-400 text-black rounded-lg hover:bg-blue-500 font-bold opacity-50"
-              >
-                <span>Traitement…</span>
-              </button>
-              <button
-                v-else-if="getCurrentUpdateState() === 'error'"
-                @click="checkForUpdates"
-                class="inline-flex items-center px-4 py-2 bg-blue-400 text-black rounded-lg hover:bg-blue-500 font-bold"
-              >
-                Réessayer
-              </button>
-            </div>
-          </div>
-          <div class="flex flex-row items-center gap-2 mb-0 justify-between">
-            <div class="flex flex-col">
-              <h3 class="text-2xl font-bold text-black">
-                Mise à jour automatique
-              </h3>
-              <p class="text-xl text-black">
-                Heure durant laquelle l'application sera mise à jour
-                automatiquement tous les jours.
-              </p>
-            </div>
-            <input
-              type="time"
-              v-model="settings.autoUpdateTime"
-              class="h-10 w-1/10 rounded border-gray-300 text-black font-bold focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 bg-gray-300 px-5"
-            />
-          </div>
-        </motion.div>
         
         <motion.div
         v-else-if="active === 'about'"
