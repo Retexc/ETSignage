@@ -268,9 +268,18 @@ def process_metro_alerts():
                     # Use description first (it has the real message), fallback to header
                     alert_text = description or header
                     
-                    # ← FIX: Skip "service normal" messages
-                    if "service normal" in alert_text.lower():
-                        logger.info(f"[INFO] Skipping 'normal service' message")
+                    # ← FIX: Skip messages that are NOT actual service disruptions
+                    skip_keywords = [
+                        "service normal",
+                        "accès",  # Access closures (entrances closed)
+                        "l'accès",
+                        "access",
+                        "entrance"
+                    ]
+                    
+                    should_skip = any(keyword in alert_text.lower() for keyword in skip_keywords)
+                    if should_skip:
+                        logger.info(f"[INFO] Skipping non-service-disruption message: {alert_text[:50]}...")
                         continue
                     
                     # Apply the alert to affected lines
@@ -452,6 +461,15 @@ def get_data():
             
             stm_trip_entities = fetch_stm_realtime_data()
             positions_dict = fetch_stm_positions_dict(BUS_ROUTES, stm_trips)
+            
+            # Debug: Log how many vehicle positions we got
+            logger.info(f"[OCCUPANCY] Fetched {len(positions_dict)} vehicle positions")
+            if len(positions_dict) > 0:
+                # Show first few for debugging
+                for i, ((route, trip), pos_data) in enumerate(list(positions_dict.items())[:3]):
+                    logger.info(f"  Position {i+1}: Route={route}, Trip={trip}, Occ={pos_data.get('occupancy')}")
+            else:
+                logger.warning("[OCCUPANCY] No vehicle positions found - occupancy will show as 'Unknown'")
             
             buses = process_stm_trip_updates(
                 stm_trip_entities,
