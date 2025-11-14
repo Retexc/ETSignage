@@ -48,13 +48,68 @@ STM_DIR = os.path.join(GTFS_BASE, "stm")
 
 os.makedirs(STM_DIR, exist_ok=True)
 
+# ─── Download GTFS files from Supabase on startup (production only) ────────
+if os.environ.get('ENVIRONMENT') != 'development':
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+    
+    if SUPABASE_URL and SUPABASE_KEY:
+        try:
+            print("📥 Downloading GTFS files from Supabase...")
+            from supabase import create_client
+            
+            supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+            
+            # List files in the stm folder
+            result = supabase.storage.from_("gtfs-files").list("stm")
+            
+            if result:
+                files_to_download = ["routes.txt", "trips.txt", "stop_times.txt"]
+                
+                for filename in files_to_download:
+                    # Find the most recent version of this file
+                    matching_files = [f for f in result if f["name"].endswith(filename)]
+                    
+                    if matching_files:
+                        # Sort by created_at to get most recent
+                        matching_files.sort(key=lambda x: x["created_at"], reverse=True)
+                        latest_file = matching_files[0]
+                        
+                        # Download the file
+                        file_path_in_bucket = f"stm/{latest_file['name']}"
+                        local_file_path = os.path.join(STM_DIR, filename)
+                        
+                        print(f"   Downloading {filename}...")
+                        data = supabase.storage.from_("gtfs-files").download(file_path_in_bucket)
+                        
+                        with open(local_file_path, "wb") as f:
+                            f.write(data)
+                        
+                        file_size = len(data) / 1024
+                        print(f"   ✅ {filename} downloaded ({file_size:.1f} KB)")
+                
+                print("✅ GTFS files downloaded from Supabase!")
+            else:
+                print("⚠️  No GTFS files found in Supabase")
+                
+        except Exception as e:
+            print(f"⚠️  Error downloading GTFS from Supabase: {e}")
+            print("   Continuing with local files if available...")
+    else:
+        print("⚠️  Supabase credentials not set, skipping cloud download")
+
 # ─── check for required GTFS files ────────────────────────────
 required_stm = ["routes.txt", "trips.txt", "stop_times.txt"]
 
 missing = []
 for fname in required_stm:
-    if not os.path.isfile(os.path.join(STM_DIR, fname)):
+    fpath = os.path.join(STM_DIR, fname)
+    if not os.path.isfile(fpath):
         missing.append(f"stm/{fname}")
+    else:
+        # Print file size to confirm it exists
+        fsize = os.path.getsize(fpath) / 1024
+        print(f"✓ Found {fname} ({fsize:.1f} KB)")
 
 if missing:
     print("⚠️  Fichiers GTFS manquants:")
@@ -62,10 +117,11 @@ if missing:
         print(f"   • {m}")
     print("\nL'application démarre quand même. Téléchargez les fichiers GTFS via l'interface admin.")
     routes_map = {}
-    stm_trips = []
+    stm_trips = {}  # ← FIX: Changed from [] to {}
     stm_stop_times = {}
 else:
     # Charger les fichiers 
+    print("📂 Loading GTFS files...")
     stm_routes_fp = os.path.join(STM_DIR, "routes.txt")
     stm_trips_fp = os.path.join(STM_DIR, "trips.txt")
     stm_stop_times_fp = os.path.join(STM_DIR, "stop_times.txt")
@@ -73,6 +129,9 @@ else:
     routes_map = load_stm_routes(stm_routes_fp)
     stm_trips = load_stm_gtfs_trips(stm_trips_fp, routes_map)
     stm_stop_times = load_stm_stop_times(stm_stop_times_fp)
+    
+    print(f"✅ Loaded {len(stm_trips)} trips")
+    print(f"✅ Loaded {len(routes_map)} routes")
 
 def get_weather():
     """Fetch weather from WeatherAPI at most once per CACHE_TTL."""
@@ -104,15 +163,9 @@ def get_weather():
 # Metro Alerts Processing Functions
 # ====================================================================
 def process_metro_alerts():
-    """
-    Fetch and process metro line alerts from STM API.
-    Returns a list of metro lines with simplified status display.
-    
-    FIXED: Now properly detects:
-    - Network-wide alerts (strikes) via agency_id == "STM"
-    - Individual line alerts via route_short_name
-    - Individual line alerts via route_id
-    """
+    if os.environ.get('ENVIRONMENT') == 'development':
+        from backend.mock_stm_data import get_mock_metro_lines
+        return get_mock_metro_lines()
     try:
         # Fetch all STM alerts
         alerts_data = fetch_stm_alerts()
@@ -212,11 +265,17 @@ def process_metro_alerts():
                             affected_metro_lines.append(metro_line)
                             logger.info(f"[ALERT] Detected alert for metro line {metro_line}: {header[:50]}...")
                     
+                    # Use description first (it has the real message), fallback to header
+                    alert_text = description or header
+                    
+                    # ← FIX: Skip "service normal" messages
+                    if "service normal" in alert_text.lower():
+                        logger.info(f"[INFO] Skipping 'normal service' message")
+                        continue
+                    
                     # Apply the alert to affected lines
                     if is_network_wide:
                         # Network-wide alert affects all metro lines
-                        # Use description first (it has the real message), fallback to header
-                        alert_text = description or header
                         logger.warning(f"[WARNING] APPLYING NETWORK-WIDE ALERT TO ALL METRO LINES")
                         logger.info(f"   Alert text: '{alert_text}'")
                         for line_id in metro_status.keys():
@@ -226,8 +285,6 @@ def process_metro_alerts():
                             metro_status[line_id]["statusColor"] = "text-red-400"
                     elif affected_metro_lines:
                         # Apply alert to specific metro lines
-                        # Use description first (it has the real message), fallback to header
-                        alert_text = description or header
                         logger.warning(f"[WARNING] APPLYING ALERT TO LINES: {', '.join(affected_metro_lines)}")
                         logger.info(f"   Alert text: '{alert_text}'")
                         for line_id in affected_metro_lines:
@@ -387,8 +444,11 @@ def get_data():
         # ========== STM BUSES WITH OCCUPANCY ==========
         buses = []
         try:
-            # Get the bus routes from config
-            from .config import BUS_ROUTES
+            if os.environ.get('ENVIRONMENT') == 'development':
+                from backend.mock_stm_data import get_mock_processed_buses
+                buses = get_mock_processed_buses()
+            else:
+                from .config import BUS_ROUTES
             
             stm_trip_entities = fetch_stm_realtime_data()
             positions_dict = fetch_stm_positions_dict(BUS_ROUTES, stm_trips)
