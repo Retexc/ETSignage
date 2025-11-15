@@ -544,23 +544,42 @@ def validate_trip(trip_id, route_id, gtfs_trips):
     return trip_info["route_id"] == route_id
 
 
-def fetch_stm_positions_dict(desired_routes, stm_trips):
+def fetch_stm_positions_dict(desired_routes, stm_trips, routes_map=None):
     """
     Fetch vehicle positions and extract occupancy data
+    
+    Args:
+        desired_routes: List of short route names like ["36", "61"]
+        stm_trips: Dictionary of trip data
+        routes_map: Dictionary mapping GTFS route_id to short names (REQUIRED for occupancy)
     """
     positions = {}
     entities = fetch_stm_vehicle_positions()
     if not entities:
+        print("[OCCUPANCY] No vehicle position entities returned from API")
         return positions 
+    
+    print(f"[OCCUPANCY] Processing {len(entities)} vehicle position entities...")
     
     for entity in entities:
         if entity.HasField("vehicle"):
             vehicle = entity.vehicle
-            route_id = vehicle.trip.route_id
+            gtfs_route_id = vehicle.trip.route_id  # This is the internal GTFS ID
             trip_id = vehicle.trip.trip_id
+            
+            # Convert GTFS route_id to short name
+            if routes_map:
+                short_route_id = routes_map.get(gtfs_route_id, gtfs_route_id)
+            else:
+                short_route_id = gtfs_route_id
+                print(f"[OCCUPANCY] WARNING: No routes_map provided, using raw route_id: {gtfs_route_id}")
 
-            # Only store if it's a route/trip we care about & is valid
-            if route_id in desired_routes and validate_trip(trip_id, route_id, stm_trips):
+            # Only store if it's a route/trip we care about
+            if short_route_id in desired_routes:
+                # Validate the trip exists in our GTFS data
+                if not validate_trip(trip_id, short_route_id, stm_trips):
+                    continue
+                
                 bus_lat = bus_lon = None
                 if vehicle.HasField("position"):
                     bus_lat = vehicle.position.latitude
@@ -570,6 +589,7 @@ def fetch_stm_positions_dict(desired_routes, stm_trips):
                 occupancy_raw = None
                 if vehicle.HasField("occupancy_status"):
                     occupancy_raw = vehicle.occupancy_status
+                    print(f"[OCCUPANCY] Found occupancy for route {short_route_id}, trip {trip_id}: {occupancy_raw}")
                 
                 feed_stop_id = vehicle.stop_id if vehicle.HasField("stop_id") else None
 
@@ -578,14 +598,17 @@ def fetch_stm_positions_dict(desired_routes, stm_trips):
                 if vehicle.HasField("current_status"):
                     current_status_str = vehicle.current_status 
 
-                positions[(route_id, trip_id)] = {
+                # Store using SHORT route name
+                positions[(short_route_id, trip_id)] = {
                     "lat": bus_lat,
                     "lon": bus_lon,
                     "occupancy": occupancy_raw,  # Store raw occupancy value
                     "stop_id": feed_stop_id,
                     "current_status": current_status_str
                 }
+                print(f"[OCCUPANCY] Stored position for route {short_route_id}, trip {trip_id}")
     
+    print(f"[OCCUPANCY] Total positions stored: {len(positions)}")
     return positions
 
 def process_stm_trip_updates(

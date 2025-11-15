@@ -460,7 +460,8 @@ def get_data():
                 from .config import BUS_ROUTES
             
             stm_trip_entities = fetch_stm_realtime_data()
-            positions_dict = fetch_stm_positions_dict(BUS_ROUTES, stm_trips)
+            # FIX: Pass routes_map so vehicle positions can convert GTFS IDs to short names
+            positions_dict = fetch_stm_positions_dict(BUS_ROUTES, stm_trips, routes_map)
             
             # Debug: Log how many vehicle positions we got
             logger.info(f"[OCCUPANCY] Fetched {len(positions_dict)} vehicle positions")
