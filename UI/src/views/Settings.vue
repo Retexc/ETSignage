@@ -86,16 +86,12 @@ function scheduleNextUpdate() {
   }, msUntilNext);
 }
 
-// Configuration des stops et routes utilisés
 const USED_STOPS = ['52743', '52744', '62248', '62355'];
 const USED_ROUTES = ['36', '61'];
 
-// Fonction pour uploader GTFS vers Supabase
-// NOUVELLE VERSION: Extrait et filtre les fichiers nécessaires
 async function uploadGTFS(transport, file) {
   if (!file) return;
   
-  // Vérifier que c'est bien un fichier ZIP
   if (!file.name.endsWith('.zip')) {
     alert('Le fichier doit être un fichier ZIP (.zip)');
     return;
@@ -109,10 +105,8 @@ async function uploadGTFS(transport, file) {
   try {
     console.log(`📤 Extraction du fichier GTFS ${transport.toUpperCase()}...`);
     
-    // 1. Lire le fichier ZIP
     const zip = await JSZip.loadAsync(file);
     
-    // 2. Vérifier que les fichiers nécessaires existent
     const requiredFiles = ['routes.txt', 'trips.txt', 'stop_times.txt'];
     const missingFiles = [];
     
@@ -130,21 +124,43 @@ async function uploadGTFS(transport, file) {
     
     console.log('✅ Tous les fichiers nécessaires sont présents');
     
-    // 3. Traiter et uploader chaque fichier
     let uploadCount = 0;
     
-    // === ROUTES.TXT - Filtrer seulement les routes 36 et 61 ===
+    // === ROUTES.TXT - Filtrer par route_short_name ===
     console.log('📤 Traitement de routes.txt...');
     const routesContent = await zip.file('routes.txt').async("string");
     const routesLines = routesContent.split('\n');
     const routesHeader = routesLines[0];
+    
+    // Parse header to find route_short_name column
+    const routesHeaders = routesHeader.split(',');
+    const routeShortNameIndex = routesHeaders.findIndex(h => h.trim() === 'route_short_name');
+    
+    console.log(`   Found route_short_name at index: ${routeShortNameIndex}`);
+    
     const filteredRoutes = routesLines.filter((line, index) => {
-      if (index === 0) return true; // Garder le header
-      return USED_ROUTES.some(route => line.includes(`"${route}"`));
+      if (index === 0) return true; // Keep header
+      if (!line.trim()) return false; // Skip empty lines
+      
+      const columns = line.split(',');
+      const routeShortName = columns[routeShortNameIndex]?.replace(/"/g, '').trim();
+      
+      const match = USED_ROUTES.includes(routeShortName);
+      if (match) {
+        console.log(`   ✓ Keeping route: ${routeShortName}`);
+      }
+      return match;
     });
-    const filteredRoutesContent = filteredRoutes.join('\n');
+    
     console.log(`   Routes: ${routesLines.length} lignes → ${filteredRoutes.length} lignes`);
     
+    if (filteredRoutes.length <= 1) {
+      alert('❌ Aucune route 36 ou 61 trouvée dans le fichier GTFS!');
+      uploadingRef.value = false;
+      return;
+    }
+    
+    const filteredRoutesContent = filteredRoutes.join('\n');
     const routesBlob = new Blob([filteredRoutesContent], { type: 'text/plain' });
     const routesFile = new File([routesBlob], 'routes.txt', { type: 'text/plain' });
     let result = await uploadFile(routesFile, 'gtfs-files', transport);
@@ -156,30 +172,45 @@ async function uploadGTFS(transport, file) {
     uploadCount++;
     console.log(`✅ routes.txt uploadé (${uploadCount}/3)`);
     
-    // === TRIPS.TXT - Filtrer par route_id ===
+    // Get the actual GTFS route_ids for our routes (might be like "1-36", "1-61")
+    const gtfsRouteIds = new Set();
+    filteredRoutes.forEach((line, index) => {
+      if (index === 0) return; // Skip header
+      const columns = line.split(',');
+      const routeId = columns[0]?.replace(/"/g, '').trim(); // First column is route_id
+      if (routeId) gtfsRouteIds.add(routeId);
+    });
+    
+    console.log(`   GTFS Route IDs: ${Array.from(gtfsRouteIds).join(', ')}`);
+    
+    // === TRIPS.TXT - Filtrer par route_id (using GTFS IDs) ===
     console.log('📤 Traitement de trips.txt...');
     const tripsContent = await zip.file('trips.txt').async("string");
     const tripsLines = tripsContent.split('\n');
     
-    // Parser le header pour trouver l'index de route_id
     const tripsHeaderLine = tripsLines[0];
     const tripsHeaders = tripsHeaderLine.split(',');
     const routeIdIndex = tripsHeaders.findIndex(h => h.trim() === 'route_id');
     
     const filteredTrips = tripsLines.filter((line, index) => {
-      if (index === 0) return true; // Garder le header
-      if (!line.trim()) return false; // Ignorer les lignes vides
+      if (index === 0) return true;
+      if (!line.trim()) return false;
       
       const columns = line.split(',');
       const routeId = columns[routeIdIndex]?.replace(/"/g, '').trim();
       
-      // Garder seulement les trips des routes 36 et 61
-      return USED_ROUTES.includes(routeId);
+      return gtfsRouteIds.has(routeId);
     });
     
-    const filteredTripsContent = filteredTrips.join('\n');
     console.log(`   Trips: ${tripsLines.length} lignes → ${filteredTrips.length} lignes`);
     
+    if (filteredTrips.length <= 1) {
+      alert('❌ Aucun trip trouvé pour les routes 36 et 61!');
+      uploadingRef.value = false;
+      return;
+    }
+    
+    const filteredTripsContent = filteredTrips.join('\n');
     const tripsBlob = new Blob([filteredTripsContent], { type: 'text/plain' });
     const tripsFile = new File([tripsBlob], 'trips.txt', { type: 'text/plain' });
     result = await uploadFile(tripsFile, 'gtfs-files', transport);
@@ -191,21 +222,20 @@ async function uploadGTFS(transport, file) {
     uploadCount++;
     console.log(`✅ trips.txt uploadé (${uploadCount}/3)`);
     
-    // === STOP_TIMES.TXT - Filtrer par stop_id ===
+    // === STOP_TIMES.TXT - Filtrer par stop_id ET trip_id ===
     console.log('📤 Traitement de stop_times.txt (ceci peut prendre un moment)...');
     const stopTimesContent = await zip.file('stop_times.txt').async("string");
     const stopTimesLines = stopTimesContent.split('\n');
     
-    // Parser le header
     const stopTimesHeaderLine = stopTimesLines[0];
     const stopTimesHeaders = stopTimesHeaderLine.split(',');
     const stopIdIndex = stopTimesHeaders.findIndex(h => h.trim() === 'stop_id');
     const tripIdIndex = stopTimesHeaders.findIndex(h => h.trim() === 'trip_id');
     
-    // Créer un Set des trip_ids valides depuis trips filtrés
+    // Create Set of valid trip_ids
     const validTripIds = new Set();
     filteredTrips.forEach((line, index) => {
-      if (index === 0) return; // Skip header
+      if (index === 0) return;
       const columns = line.split(',');
       const tripId = columns[0]?.replace(/"/g, '').trim();
       if (tripId) validTripIds.add(tripId);
@@ -214,21 +244,25 @@ async function uploadGTFS(transport, file) {
     console.log(`   Filtrage avec ${validTripIds.size} trips valides et ${USED_STOPS.length} stops...`);
     
     const filteredStopTimes = stopTimesLines.filter((line, index) => {
-      if (index === 0) return true; // Garder le header
-      if (!line.trim()) return false; // Ignorer les lignes vides
+      if (index === 0) return true;
+      if (!line.trim()) return false;
       
       const columns = line.split(',');
       const tripId = columns[tripIdIndex]?.replace(/"/g, '').trim();
       const stopId = columns[stopIdIndex]?.replace(/"/g, '').trim();
       
-      // Garder seulement les lignes avec nos stops ET nos trips
       return USED_STOPS.includes(stopId) && validTripIds.has(tripId);
     });
     
-    const filteredStopTimesContent = filteredStopTimes.join('\n');
     console.log(`   Stop times: ${stopTimesLines.length} lignes → ${filteredStopTimes.length} lignes`);
-    console.log(`   Taille réduite: ${(stopTimesContent.length / 1024 / 1024).toFixed(2)} MB → ${(filteredStopTimesContent.length / 1024 / 1024).toFixed(2)} MB`);
     
+    if (filteredStopTimes.length <= 1) {
+      alert('❌ Aucun stop_time trouvé pour vos arrêts!');
+      uploadingRef.value = false;
+      return;
+    }
+    
+    const filteredStopTimesContent = filteredStopTimes.join('\n');
     const stopTimesBlob = new Blob([filteredStopTimesContent], { type: 'text/plain' });
     const stopTimesFile = new File([stopTimesBlob], 'stop_times.txt', { type: 'text/plain' });
     result = await uploadFile(stopTimesFile, 'gtfs-files', transport);
@@ -243,7 +277,6 @@ async function uploadGTFS(transport, file) {
     console.log(`✅ Tous les fichiers GTFS ${transport.toUpperCase()} uploadés avec succès!`);
     alert(`✅ ${uploadCount} fichiers GTFS ${transport.toUpperCase()} filtrés et uploadés!\n\nRoutes: ${filteredRoutes.length} lignes\nTrips: ${filteredTrips.length} lignes\nStop times: ${filteredStopTimes.length} lignes`);
     
-    // Rafraîchir les dates de dernière mise à jour
     await fetchLastUpdates();
     
   } catch (error) {
