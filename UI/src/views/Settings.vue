@@ -223,56 +223,76 @@ async function uploadGTFS(transport, file) {
     console.log(`✅ trips.txt uploadé (${uploadCount}/3)`);
     
     // === STOP_TIMES.TXT - Filtrer par stop_id ET trip_id ===
-    console.log('📤 Traitement de stop_times.txt (ceci peut prendre un moment)...');
-    const stopTimesContent = await zip.file('stop_times.txt').async("string");
-    const stopTimesLines = stopTimesContent.split('\n');
-    
-    const stopTimesHeaderLine = stopTimesLines[0];
-    const stopTimesHeaders = stopTimesHeaderLine.split(',');
-    const stopIdIndex = stopTimesHeaders.findIndex(h => h.trim() === 'stop_id');
-    const tripIdIndex = stopTimesHeaders.findIndex(h => h.trim() === 'trip_id');
-    
-    // Create Set of valid trip_ids
-    const validTripIds = new Set();
-    filteredTrips.forEach((line, index) => {
-      if (index === 0) return;
-      const columns = line.split(',');
-      const tripId = columns[0]?.replace(/"/g, '').trim();
-      if (tripId) validTripIds.add(tripId);
-    });
-    
-    console.log(`   Filtrage avec ${validTripIds.size} trips valides et ${USED_STOPS.length} stops...`);
-    
-    const filteredStopTimes = stopTimesLines.filter((line, index) => {
-      if (index === 0) return true;
-      if (!line.trim()) return false;
-      
-      const columns = line.split(',');
-      const tripId = columns[tripIdIndex]?.replace(/"/g, '').trim();
-      const stopId = columns[stopIdIndex]?.replace(/"/g, '').trim();
-      
-      return USED_STOPS.includes(stopId) && validTripIds.has(tripId);
-    });
-    
-    console.log(`   Stop times: ${stopTimesLines.length} lignes → ${filteredStopTimes.length} lignes`);
-    
-    if (filteredStopTimes.length <= 1) {
-      alert('❌ Aucun stop_time trouvé pour vos arrêts!');
-      uploadingRef.value = false;
-      return;
-    }
-    
-    const filteredStopTimesContent = filteredStopTimes.join('\n');
-    const stopTimesBlob = new Blob([filteredStopTimesContent], { type: 'text/plain' });
-    const stopTimesFile = new File([stopTimesBlob], 'stop_times.txt', { type: 'text/plain' });
-    result = await uploadFile(stopTimesFile, 'gtfs-files', transport);
-    if (!result.success) {
-      alert(`❌ Erreur upload stop_times.txt: ${result.error}`);
-      uploadingRef.value = false;
-      return;
-    }
-    uploadCount++;
-    console.log(`✅ stop_times.txt uploadé (${uploadCount}/3)`);
+console.log('📤 Traitement de stop_times.txt (ceci peut prendre un moment)...');
+const stopTimesContent = await zip.file('stop_times.txt').async("string");
+const stopTimesLines = stopTimesContent.split('\n');
+
+const stopTimesHeader = stopTimesLines[0];
+console.log(`   Header: ${stopTimesHeader}`);
+
+// Parser le header
+const stopTimesHeaders = stopTimesHeader.split(',').map(h => h.trim());
+const stopIdIndex = stopTimesHeaders.indexOf('stop_id');
+const tripIdIndex = stopTimesHeaders.indexOf('trip_id');
+
+console.log(`   stop_id à l'index: ${stopIdIndex}, trip_id à l'index: ${tripIdIndex}`);
+
+// Créer un Set des trip_ids valides depuis trips filtrés
+const validTripIds = new Set();
+filteredTrips.forEach((line, index) => {
+  if (index === 0) return; // Skip header
+  if (!line.trim()) return;
+  const columns = line.split(',');
+  const tripId = columns[0]?.replace(/"/g, '').trim();
+  if (tripId) {
+    validTripIds.add(tripId);
+  }
+});
+
+console.log(`   ${validTripIds.size} trips valides trouvés`);
+console.log(`   Premiers trips: ${Array.from(validTripIds).slice(0, 5).join(', ')}`);
+
+// Filtrer les stop_times
+const filteredStopTimes = stopTimesLines.filter((line, index) => {
+  if (index === 0) return true; // Garder le header
+  if (!line.trim()) return false; // Ignorer les lignes vides
+  
+  const columns = line.split(',');
+  const tripId = columns[tripIdIndex]?.replace(/"/g, '').trim();
+  const stopId = columns[stopIdIndex]?.replace(/"/g, '').trim();
+  
+  // Debug: Log les premières lignes
+  if (index <= 5) {
+    console.log(`   Ligne ${index}: trip=${tripId}, stop=${stopId}, match=${USED_STOPS.includes(stopId) && validTripIds.has(tripId)}`);
+  }
+  
+  // Garder seulement les lignes avec nos stops ET nos trips
+  return USED_STOPS.includes(stopId) && validTripIds.has(tripId);
+});
+
+const filteredStopTimesContent = filteredStopTimes.join('\n');
+console.log(`   Stop times: ${stopTimesLines.length} lignes → ${filteredStopTimes.length} lignes`);
+console.log(`   Taille: ${(stopTimesContent.length / 1024 / 1024).toFixed(2)} MB → ${(filteredStopTimesContent.length / 1024).toFixed(2)} KB`);
+
+if (filteredStopTimes.length <= 1) {
+  console.error('❌ Aucun stop_time trouvé!');
+  console.log(`   validTripIds size: ${validTripIds.size}`);
+  console.log(`   USED_STOPS: ${USED_STOPS.join(', ')}`);
+  alert('❌ Aucun stop_time trouvé pour vos arrêts! Vérifiez la console pour plus de détails.');
+  uploadingRef.value = false;
+  return;
+}
+
+const stopTimesBlob = new Blob([filteredStopTimesContent], { type: 'text/plain' });
+const stopTimesFile = new File([stopTimesBlob], 'stop_times.txt', { type: 'text/plain' });
+result = await uploadFile(stopTimesFile, 'gtfs-files', transport);
+if (!result.success) {
+  alert(`❌ Erreur upload stop_times.txt: ${result.error}`);
+  uploadingRef.value = false;
+  return;
+}
+uploadCount++;
+console.log(`✅ stop_times.txt uploadé (${uploadCount}/3)`);
     
     console.log(`✅ Tous les fichiers GTFS ${transport.toUpperCase()} uploadés avec succès!`);
     alert(`✅ ${uploadCount} fichiers GTFS ${transport.toUpperCase()} filtrés et uploadés!\n\nRoutes: ${filteredRoutes.length} lignes\nTrips: ${filteredTrips.length} lignes\nStop times: ${filteredStopTimes.length} lignes`);
