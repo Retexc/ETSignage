@@ -237,13 +237,20 @@ const tripIdIndex = stopTimesHeaders.indexOf('trip_id');
 
 console.log(`   stop_id à l'index: ${stopIdIndex}, trip_id à l'index: ${tripIdIndex}`);
 
-// Créer un Set des trip_ids valides depuis trips filtrés
 const validTripIds = new Set();
+
+
+const tripsHeaderLine = filteredTrips[0];
+const tripsHeaders = tripsHeaderLine.split(',').map(h => h.trim());
+const tripIdColIndex = tripsHeaders.indexOf('trip_id');
+
+console.log(`   trip_id dans trips.txt à l'index: ${tripIdColIndex}`);
+
 filteredTrips.forEach((line, index) => {
-  if (index === 0) return; // Skip header
+  if (index === 0) return; 
   if (!line.trim()) return;
   const columns = line.split(',');
-  const tripId = columns[0]?.replace(/"/g, '').trim();
+  const tripId = columns[tripIdColIndex]?.replace(/"/g, '').trim();
   if (tripId) {
     validTripIds.add(tripId);
   }
