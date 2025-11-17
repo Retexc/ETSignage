@@ -4,7 +4,12 @@ from datetime import datetime
 from flask_cors import CORS
 from flask import Flask, render_template, request, jsonify, redirect
 
-from flask import Flask, render_template, request, jsonify
+try:
+    from supabase import create_client
+    SUPABASE_AVAILABLE = True
+except ImportError:
+    SUPABASE_AVAILABLE = False
+    print("⚠️  Supabase module not installed")
 # ────── PACKAGE IMPORTS ───────────────────────────────────────
 from .config            import WEATHER_API_KEY
 from .utils             import is_service_unavailable
@@ -56,13 +61,14 @@ if os.environ.get('ENVIRONMENT') != 'development':
     if SUPABASE_URL and SUPABASE_KEY:
         try:
             print("📥 Downloading GTFS files from Supabase...")
-            from supabase import create_client
             
             supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
             
             # List files in the stm folder
             result = supabase.storage.from_("gtfs-files").list("stm")
             print(f"   DEBUG: Supabase list result: {result}")
+            print(f"   DEBUG: Result type: {type(result)}")
+            print(f"   DEBUG: Result length: {len(result) if result else 0}")
             if result:
                 files_to_download = ["routes.txt", "trips.txt", "stop_times.txt"]
                 
