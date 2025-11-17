@@ -239,10 +239,9 @@ console.log(`   stop_id à l'index: ${stopIdIndex}, trip_id à l'index: ${tripId
 
 const validTripIds = new Set();
 
-
-const tripsHeaderLine = filteredTrips[0];
-const tripsHeaders = tripsHeaderLine.split(',').map(h => h.trim());
-const tripIdColIndex = tripsHeaders.indexOf('trip_id');
+const filteredTripsHeader = filteredTrips[0];  
+const filteredTripsHeaders = filteredTripsHeader.split(',').map(h => h.trim());
+const tripIdColIndex = filteredTripsHeaders.indexOf('trip_id');
 
 console.log(`   trip_id dans trips.txt à l'index: ${tripIdColIndex}`);
 
