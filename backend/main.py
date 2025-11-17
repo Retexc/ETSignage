@@ -62,7 +62,7 @@ if os.environ.get('ENVIRONMENT') != 'development':
             
             # List files in the stm folder
             result = supabase.storage.from_("gtfs-files").list("stm")
-            
+            print(f"   DEBUG: Supabase list result: {result}")
             if result:
                 files_to_download = ["routes.txt", "trips.txt", "stop_times.txt"]
                 
