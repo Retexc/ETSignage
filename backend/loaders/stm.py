@@ -529,10 +529,11 @@ def stm_map_occupancy_status(status):
     Map GTFS-RT occupancy status to human-readable format
     """
     mapping = {
-        0: "MANY_SEATS_AVAILABLE",
-        1: "FEW_SEATS_AVAILABLE",
-        2: "STANDING_ROOM_ONLY",
-        3: "FULL",
+        0: "EMPTY",
+        1: "MANY_SEATS_AVAILABLE",
+        2: "FEW_SEATS_AVAILABLE",
+        3: "STANDING_ROOM_ONLY",
+        4: "FULL",
     }
     return mapping.get(status, "Unknown")
       
